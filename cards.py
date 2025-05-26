@@ -12,17 +12,32 @@ class Cards:
         self.is_face_up = is_face_up
         self.front_image = None
         self.back_image = None
+        self.rect = None
 
     def load_images(self):
-        import pygame
         base_dir = os.path.dirname(__file__)
         front_path = os.path.join(base_dir, self.front_image_path)
         back_path = os.path.join(base_dir, self.back_image_path)
         self.front_image = pygame.image.load(front_path).convert_alpha()
         self.back_image = pygame.image.load(back_path).convert_alpha()
 
+        # 画像読み込み後、サイズに基づいてrectを生成
+        w = self.front_image.get_width()
+        h = self.front_image.get_height()
+        x, y = self.position
+        self.rect = pygame.Rect(x, y, w, h)
+
     def get_image(self):
         return self.front_image if self.is_face_up else self.back_image
+
+    def draw(self, screen):
+        """カードの描画"""
+        if self.rect:
+            screen.blit(self.get_image(), self.rect.topleft)
+
+    def is_clicked(self, pos):
+        """クリック位置がこのカードの上かどうかを判定"""
+        return self.rect and self.rect.collidepoint(pos)
 
 cards = [
     Cards((0,0), 1, "bright", "crane", "assets/img/cards/1_1.png", "assets/img/cards/0_0.png", False),

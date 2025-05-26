@@ -5,85 +5,76 @@ import os
 pygame.init()
 
 screen_width = 610
-screen_hight = 410
-screen = pygame.display.set_mode((screen_width, screen_hight))
+screen_height = 410
+screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("花札")
 
-# 画像をロード
-for card in cards:
-    card.load_images()
-
-# FPSの設定
-FPS = 60
-clock = pygame.time.Clock()
-
-# 背景画像の読み込み
+# 背景読み込み
 base_dir = os.path.dirname(__file__)
 bg_path = os.path.join(base_dir, "assets", "img", "other", "tatami.png")
 background = pygame.image.load(bg_path)
-background = pygame.transform.scale(background, (screen_width, screen_hight))
+background = pygame.transform.scale(background, (screen_width, screen_height))
 
-# カード情報
-card_x, card_y = 50, 50
+# カードの読み込みと初期化（最初の1枚だけ表示）
 card = cards[0]
-card_width, card_height = card.get_image().get_width(), card.get_image().get_height()
+card.position = (50, 50)
+card.load_images()
 
-# アニメーション用変数
+# アニメーション変数
 flipping = False
 flip_progress = 0
-flip_speed = 4  # めくりの速さ（数値を上げると速くなる）
-flip_switched = False  # 裏表を切り替えたかどうか
+flip_speed = 4
+flip_switched = False
+flip_card = None
+
+# FPS設定
+FPS = 60
+clock = pygame.time.Clock()
 
 run = True
 while run:
-    screen.blit(background, (0, 0))  # 背景描画
+    screen.blit(background, (0, 0))
+
+    # カードの描画
+    if not (flipping and flip_card == card):
+        card.draw(screen)
 
     # イベント処理
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
             run = False
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            run = False
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:    #左クリック
-            # マウスの位置を取得 mx = event.pos[0] my = event.pos[1]と同じ
-            mx, my = event.pos   
-            #カードの位置からカードの幅までの範囲かどうかをチェック                                           
-            if (card_x <= mx <= card_x + card_width and 
-            #カードの位置からカードの高さまでの範囲かどうかをチェック    
-                card_y <= my <= card_y + card_height and not flipping):
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not flipping:
+            if card.is_clicked(event.pos):
                 flipping = True
+                flip_card = card
                 flip_progress = 0
                 flip_switched = False
 
-    # カードのアニメーション処理
-    if flipping:
-        if flip_progress < card_width // 2:
-            # カードを縮小中
-            current_width = max(1, card_width - flip_progress * 2)
-            image = card.get_image()
-            scaled = pygame.transform.scale(image, (current_width, card_height))
-            screen.blit(scaled, (card_x + flip_progress, card_y))
+    # アニメーション処理
+    if flipping and flip_card:
+        image = flip_card.get_image()
+        w, h = image.get_width(), image.get_height()
+
+        if flip_progress < w // 2:
+            current_width = max(1, w - flip_progress * 2)
+            scaled = pygame.transform.scale(image, (current_width, h))
+            screen.blit(scaled, (flip_card.rect.x + flip_progress, flip_card.rect.y))
             flip_progress += flip_speed
         elif not flip_switched:
-            # 裏表を切り替える（1回だけ）
-            card.is_face_up = not card.is_face_up
+            flip_card.is_face_up = not flip_card.is_face_up
             flip_switched = True
             flip_progress += flip_speed
-        elif flip_progress < card_width:
-            # カードを拡大中
-            current_width = max(1, (flip_progress - card_width // 2) * 2)
-            image = card.get_image()
-            scaled = pygame.transform.scale(image, (current_width, card_height))
-            screen.blit(scaled, (card_x + card_width // 2 - current_width // 2, card_y))
+        elif flip_progress < w:
+            current_width = max(1, (flip_progress - w // 2) * 2)
+            image = flip_card.get_image()
+            scaled = pygame.transform.scale(image, (current_width, h))
+            x = flip_card.rect.x + w // 2 - current_width // 2
+            screen.blit(scaled, (x, flip_card.rect.y))
             flip_progress += flip_speed
         else:
-            # アニメーション完了
             flipping = False
             flip_progress = 0
-            screen.blit(card.get_image(), (card_x, card_y))
-    else:
-        # 通常表示
-        screen.blit(card.get_image(), (card_x, card_y))
+            flip_card = None
 
     pygame.display.update()
     clock.tick(FPS)
