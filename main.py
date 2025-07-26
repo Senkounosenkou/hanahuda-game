@@ -7,6 +7,7 @@ from deck import Deck  # デッキクラスをインポート
 from logic import (  # ロジックモジュールから各関数をインポート
     draw_sorted_captured_cards,  # 取り札描画関数
     capture_cards_with_animation,  # アニメーション付きカード取得関数
+    capture_multiple_cards_with_animation,  # 複数カード取得関数（新規追加）
     draw_from_yama_deck,  # 山札からカードを引く関数
     update_field_positions,  # 場札位置更新関数
     update_animations,  # アニメーション更新関数
@@ -40,6 +41,215 @@ def get_japanese_font(size=36):
 
     # すべてのフォントが見つからない場合はデフォルトフォントを返す
     return pygame.font.Font(None, size)
+
+def get_card_type_by_name(card_name):
+    """カード名からカードタイプを判定"""
+    bright_cards = ['pine_crane', 'cherry_curtain', 'full_moon_pampas', 'michikaze_willows', 'paulownia_phoenix']
+    animal_cards = ['plum_bird', 'wagtail', 'iris_bridge', 'peony_butterfly', 'boar', 'pampas_geese', 'chrysanthemum_sake_cup', 'maple_deer', 'willows_swallow']
+    ribbon_cards = ['pine_tan', 'plum_tan', 'cherry_tan', 'wisteria_tan', 'iris_tan', 'peony_tan', 'bush_clover_tan', 'chrysanthemum_tan', 'maple_tan', 'willows_tan']
+    
+    if card_name in bright_cards:
+        return 'bright'
+    elif card_name in animal_cards:
+        return 'animal'
+    elif card_name in ribbon_cards:
+        return 'ribbon'
+    else:
+        return 'plain'
+
+def choose_best_cpu_card(cpu_hand, cpu_captured, field_cards):
+    """CPUが最適なカードを選択する関数"""
+    
+    def get_card_priority(card):
+        """カードの優先度を計算（高い値ほど優先）"""
+        priority = 0
+        
+        # 1. 場札とマッチするカードを最優先
+        matching_field_cards = [fc for fc in field_cards if fc.month == card.month]
+        if matching_field_cards:
+            priority += 1000  # 非常に高い優先度
+            
+            # マッチするカードの価値も考慮
+            for field_card in matching_field_cards:
+                card_type = get_card_type_by_name(field_card.name)
+                if card_type == 'bright':
+                    priority += 500  # 光札は高価値
+                elif card_type == 'animal':
+                    priority += 200  # 種札は中価値
+                elif card_type == 'ribbon':
+                    priority += 100  # 短冊は低価値
+                else:
+                    priority += 50   # カス札は最低価値
+        
+        # 2. 現在の取り札で役が成立しそうなカードを優先
+        # 花見酒・月見酒の判定
+        if card.name == 'cherry_curtain':  # 桜の幕
+            # 菊の杯があるかチェック
+            has_sake_cup = any(c.name == 'chrysanthemum_sake_cup' for c in cpu_captured)
+            if has_sake_cup:
+                priority += 800  # 花見酒完成
+        elif card.name == 'chrysanthemum_sake_cup':  # 菊の杯
+            # 桜の幕または満月があるかチェック
+            has_cherry = any(c.name == 'cherry_curtain' for c in cpu_captured)
+            has_moon = any(c.name == 'full_moon_pampas' for c in cpu_captured)
+            if has_cherry or has_moon:
+                priority += 800  # 花見酒または月見酒完成
+        elif card.name == 'full_moon_pampas':  # 満月
+            # 菊の杯があるかチェック
+            has_sake_cup = any(c.name == 'chrysanthemum_sake_cup' for c in cpu_captured)
+            if has_sake_cup:
+                priority += 800  # 月見酒完成
+        
+        # 3. 光札は常に高優先度
+        card_type = get_card_type_by_name(card.name)
+        if card_type == 'bright':
+            priority += 300
+        
+        # 4. 猪鹿蝶の判定
+        if card.name in ['boar', 'maple_deer', 'peony_butterfly']:
+            # 他の猪鹿蝶カードがあるかチェック
+            ino_shika_cho = ['boar', 'maple_deer', 'peony_butterfly']
+            existing_count = sum(1 for c in cpu_captured if c.name in ino_shika_cho)
+            if existing_count >= 1:
+                priority += 400  # 猪鹿蝶に近づく
+        
+        return priority
+    
+    # 全てのカードの優先度を計算
+    card_priorities = [(card, get_card_priority(card)) for card in cpu_hand]
+    
+    # 優先度順にソート（降順）
+    card_priorities.sort(key=lambda x: x[1], reverse=True)
+    
+    # デバッグ情報を出力
+    print("🤖 CPU カード選択分析:")
+    for card, priority in card_priorities:
+        matching = [fc.name for fc in field_cards if fc.month == card.month]
+        match_info = f" -> {matching}" if matching else " (マッチなし)"
+        print(f"  {card.name}: 優先度{priority}{match_info}")
+    
+    # 最高優先度のカードを選択
+    best_card = card_priorities[0][0]
+    print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]})")
+    
+    return best_card
+
+def draw_koikoi_choice_screen(screen, game_state, japanese_font, small_font):
+    """こいこい選択画面を描画する関数"""
+    # 半透明の背景オーバーレイ
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(180)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # 選択画面の背景
+    choice_width = 600
+    choice_height = 400
+    choice_x = (SCREEN_WIDTH - choice_width) // 2
+    choice_y = (SCREEN_HEIGHT - choice_height) // 2
+    
+    pygame.draw.rect(screen, (50, 50, 100), (choice_x, choice_y, choice_width, choice_height))
+    pygame.draw.rect(screen, (255, 255, 255), (choice_x, choice_y, choice_width, choice_height), 3)
+    
+    # 役成立の表示
+    title_text = japanese_font.render("役が成立しました！", True, (255, 255, 255))
+    title_rect = title_text.get_rect(center=(SCREEN_WIDTH//2, choice_y + 50))
+    screen.blit(title_text, title_rect)
+    
+    # 現在の得点と役を表示
+    score_text = small_font.render(f"得点: {game_state['current_round_score']}文", True, (255, 255, 0))
+    score_rect = score_text.get_rect(center=(SCREEN_WIDTH//2, choice_y + 100))
+    screen.blit(score_text, score_rect)
+    
+    # 成立した役を表示
+    y_offset = 140
+    for i, yaku in enumerate(game_state['current_yakus']):
+        if i >= 3:  # 最大3つまで表示
+            break
+        yaku_text = small_font.render(f"• {yaku}", True, (200, 255, 200))
+        yaku_rect = yaku_text.get_rect(center=(SCREEN_WIDTH//2, choice_y + y_offset + i * 30))
+        screen.blit(yaku_text, yaku_rect)
+    
+    # 選択肢のボタン
+    button_width = 200
+    button_height = 60
+    agari_x = SCREEN_WIDTH//2 - button_width - 20
+    koikoi_x = SCREEN_WIDTH//2 + 20
+    button_y = choice_y + choice_height - 120
+    
+    # 上がりボタン
+    pygame.draw.rect(screen, (100, 200, 100), (agari_x, button_y, button_width, button_height))
+    pygame.draw.rect(screen, (255, 255, 255), (agari_x, button_y, button_width, button_height), 2)
+    agari_text = japanese_font.render("上がり", True, (255, 255, 255))
+    agari_rect = agari_text.get_rect(center=(agari_x + button_width//2, button_y + button_height//2))
+    screen.blit(agari_text, agari_rect)
+    
+    # こいこいボタン
+    pygame.draw.rect(screen, (200, 100, 100), (koikoi_x, button_y, button_width, button_height))
+    pygame.draw.rect(screen, (255, 255, 255), (koikoi_x, button_y, button_width, button_height), 2)
+    koikoi_text = japanese_font.render("こいこい", True, (255, 255, 255))
+    koikoi_rect = koikoi_text.get_rect(center=(koikoi_x + button_width//2, button_y + button_height//2))
+    screen.blit(koikoi_text, koikoi_rect)
+    
+    # 操作説明
+    instruction_text = small_font.render("選択してください", True, (255, 255, 255))
+    instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH//2, choice_y + choice_height - 40))
+    screen.blit(instruction_text, instruction_rect)
+    
+    return {
+        'agari_button': (agari_x, button_y, button_width, button_height),
+        'koikoi_button': (koikoi_x, button_y, button_width, button_height)
+    }
+
+def draw_cpu_choice_message(screen, choice_type, japanese_font, small_font):
+    """CPUの選択メッセージを表示する関数
+    Args:
+        screen: 描画対象のスクリーン
+        choice_type: 選択タイプ（'koikoi' または 'agari'）
+        japanese_font: 日本語フォント
+        small_font: 小さいフォント
+    """
+    # 半透明の背景オーバーレイ
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(150)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # メッセージボックス
+    box_width = 500
+    box_height = 200
+    box_x = (SCREEN_WIDTH - box_width) // 2
+    box_y = (SCREEN_HEIGHT - box_height) // 2
+    
+    # 背景色を選択に応じて変更
+    if choice_type == "koikoi":
+        bg_color = (100, 50, 50)  # 赤系（こいこい）
+        main_text = "こいこい！"
+        sub_text = "ゲームを続行します"
+        text_color = (255, 100, 100)
+    else:  # agari
+        bg_color = (50, 100, 50)  # 緑系（上がり）
+        main_text = "上がり！"
+        sub_text = "CPUの勝利です"
+        text_color = (100, 255, 100)
+    
+    pygame.draw.rect(screen, bg_color, (box_x, box_y, box_width, box_height))
+    pygame.draw.rect(screen, (255, 255, 255), (box_x, box_y, box_width, box_height), 3)
+    
+    # CPUラベル
+    cpu_label = small_font.render("CPU", True, (200, 200, 200))
+    cpu_rect = cpu_label.get_rect(center=(SCREEN_WIDTH//2, box_y + 30))
+    screen.blit(cpu_label, cpu_rect)
+    
+    # メインメッセージ
+    main_message = japanese_font.render(main_text, True, text_color)
+    main_rect = main_message.get_rect(center=(SCREEN_WIDTH//2, box_y + 80))
+    screen.blit(main_message, main_rect)
+    
+    # サブメッセージ
+    sub_message = small_font.render(sub_text, True, (255, 255, 255))
+    sub_rect = sub_message.get_rect(center=(SCREEN_WIDTH//2, box_y + 130))
+    screen.blit(sub_message, sub_rect)
 
 def setup_test_scenario(test_type, deck):
     """テスト用のカード配置を設定する関数
@@ -115,6 +325,51 @@ def setup_test_scenario(test_type, deck):
         remaining_player = ['pine_crane', 'plum_bird', 'wagtail', 'peony_butterfly']
         remaining_field = ['pine_tan', 'plum_tan', 'wisteria_tan']
         
+    elif test_type == "3枚取り" or test_type == "triple":
+        print("📝 3枚取りテスト配置を設定")
+        # 3枚取りテスト: プレイヤーが松のカードを持ち、場に松のカードが3枚
+        player_cards = ['pine_crane']  # 松の鶴（プレイヤー手札）
+        field_card_names = ['pine_tan', 'pine_1', 'pine_2']  # 松の短冊、松カス2枚（場札）
+        # 残りは通常配置
+        remaining_player = ['plum_bird', 'wagtail', 'peony_butterfly', 'boar', 'cherry_curtain', 'full_moon_pampas']
+        remaining_field = ['plum_tan', 'wisteria_tan', 'peony_tan']
+        
+    elif test_type == "CPU花見酒" or test_type == "cpu_hanami":
+        print("📝 CPU花見酒テスト配置を設定")
+        # CPU花見酒: CPUが桜の幕、菊の杯を持つ
+        player_cards = ['pine_crane', 'plum_bird', 'wagtail', 'peony_butterfly', 'boar', 'full_moon_pampas', 'maple_deer']
+        field_card_names = ['cherry_tan', 'chrysanthemum_tan']  # 桜・菊の短冊を場に配置
+        # CPUが花見酒の役札を持つように設定
+        cpu_cards = ['cherry_curtain', 'chrysanthemum_sake_cup']  # 桜の幕、菊の杯
+        # 残りは通常配置
+        remaining_player = []
+        remaining_field = ['pine_tan', 'plum_tan', 'wisteria_tan', 'peony_tan']
+        remaining_cpu = ['willows_tan', 'paulownia_1', 'bush_clover_1', 'maple_1', 'pampas_1']
+        
+    elif test_type == "CPU月見酒" or test_type == "cpu_tsukimi":
+        print("📝 CPU月見酒テスト配置を設定")
+        # CPU月見酒: CPUが満月、菊の杯を持つ
+        player_cards = ['pine_crane', 'cherry_curtain', 'plum_bird', 'wagtail', 'peony_butterfly', 'boar', 'maple_deer']
+        field_card_names = ['pampas_geese', 'chrysanthemum_tan']  # 芒・菊の短冊を場に配置
+        # CPUが月見酒の役札を持つように設定
+        cpu_cards = ['full_moon_pampas', 'chrysanthemum_sake_cup']  # 満月、菊の杯
+        # 残りは通常配置
+        remaining_player = []
+        remaining_field = ['pine_tan', 'cherry_tan', 'plum_tan', 'wisteria_tan']
+        remaining_cpu = ['willows_tan', 'paulownia_1', 'bush_clover_1', 'maple_1', 'peony_1']
+        
+    elif test_type == "CPU三光" or test_type == "cpu_3":
+        print("📝 CPU三光テスト配置を設定")
+        # CPU三光: CPUが松の鶴、桜の幕、満月を持つ
+        player_cards = ['plum_bird', 'wagtail', 'peony_butterfly', 'boar', 'maple_deer', 'chrysanthemum_sake_cup', 'willows_tan']
+        field_card_names = ['pine_tan', 'cherry_tan', 'pampas_geese']  # 松・桜・芒の短冊を場に配置
+        # CPUが三光の役札を持つように設定
+        cpu_cards = ['pine_crane', 'cherry_curtain', 'full_moon_pampas']  # 松の鶴、桜の幕、満月
+        # 残りは通常配置
+        remaining_player = []
+        remaining_field = ['plum_tan', 'wisteria_tan', 'peony_tan']
+        remaining_cpu = ['paulownia_1', 'bush_clover_1', 'maple_1', 'chrysanthemum_1']
+        
     else:
         print("❌ 不明なテストタイプ、通常配置にします")
         return None  # 通常のシャッフル配置を使用
@@ -159,10 +414,39 @@ def setup_test_scenario(test_type, deck):
             used_cards.add(card)
     
     # CPU手札（残りからランダム選択）
-    remaining_cards = [card for card in deck.cards if card not in used_cards]
-    random.shuffle(remaining_cards)
-    cpu_hand = remaining_cards[:7]
-    used_cards.update(cpu_hand)
+    if 'cpu_cards' in locals():
+        # CPU専用カード配置がある場合
+        cpu_hand = []
+        for card_name in cpu_cards:
+            card = find_card(card_name)
+            if card and card not in used_cards:
+                cpu_hand.append(card)
+                used_cards.add(card)
+                print(f"  🤖 CPU手札: {card.name}")
+        
+        # 残りのCPU手札
+        if 'remaining_cpu' in locals():
+            for card_name in remaining_cpu:
+                if len(cpu_hand) >= 7:
+                    break
+                card = find_card(card_name)
+                if card and card not in used_cards:
+                    cpu_hand.append(card)
+                    used_cards.add(card)
+        
+        # まだ7枚に足りない場合は残りからランダム
+        if len(cpu_hand) < 7:
+            remaining_cards = [card for card in deck.cards if card not in used_cards]
+            random.shuffle(remaining_cards)
+            needed = 7 - len(cpu_hand)
+            cpu_hand.extend(remaining_cards[:needed])
+            used_cards.update(remaining_cards[:needed])
+    else:
+        # 通常のCPU手札配置
+        remaining_cards = [card for card in deck.cards if card not in used_cards]
+        random.shuffle(remaining_cards)
+        cpu_hand = remaining_cards[:7]
+        used_cards.update(cpu_hand)
     
     # 山札（残りすべて）
     yama_deck = [card for card in deck.cards if card not in used_cards]
@@ -202,8 +486,9 @@ small_font = get_japanese_font(24)  # 小さめのフォントを取得
 deck = Deck(cards)
 
 # 役状態をリセット（新しいゲーム開始時）
-from logic import previous_player_yakus
+from logic import previous_player_yakus, previous_cpu_yakus
 previous_player_yakus.clear()
+previous_cpu_yakus.clear()
 print("💫 新しいゲーム開始 - 役状態をリセット")
 
 # コマンドライン引数をチェック
@@ -276,6 +561,14 @@ game_state = {
     'cpu_timer': 0,
     'cpu_action_phase': 'waiting',
     'game_over': False,  # ゲーム終了フラグを追加
+    'koikoi_choice': False,  # こいこい選択画面フラグ
+    'pending_koikoi_choice': False,  # カットイン完了後にこいこい選択を表示するフラグ
+    'koikoi_player': None,  # こいこいを選択したプレイヤー（'player' or 'cpu'）
+    'current_round_score': 0,  # 現在のラウンドの得点
+    'current_yakus': [],  # 現在成立している役
+    'cpu_choice_display': False,  # CPUの選択メッセージ表示フラグ
+    'cpu_choice_type': None,  # CPUの選択タイプ（'koikoi' または 'agari'）
+    'cpu_choice_timer': 0,  # CPUメッセージ表示時間
 }
 
 # テストモード情報を表示
@@ -304,7 +597,7 @@ while run:
     update_animations()
     
     # カットインキューの処理（前のカットインが終了した場合に次を開始）
-    process_cutin_queue(SCREEN_WIDTH, SCREEN_HEIGHT)
+    process_cutin_queue(SCREEN_WIDTH, SCREEN_HEIGHT, game_state)
     
     # カード描画
     for card in cpu_hand:
@@ -382,6 +675,17 @@ while run:
     # CPU取り札枚数表示（手札枚数の下）
     cpu_captured_text = small_font.render(f"CPU取り札: {len(cpu_captured)}枚", True, (255, 255, 255))
     screen.blit(cpu_captured_text, (info_display_x, 125))
+    
+    # CPUポイント表示
+    cpu_score, cpu_yakus = calculate_score(cpu_captured, screen_width, screen_height)
+    cpu_score_text = small_font.render(f"CPUポイント: {cpu_score}文", True, (255, 255, 100))
+    screen.blit(cpu_score_text, (info_display_x, 150))
+    
+    # CPU成立役表示（最大2つまで）
+    if cpu_yakus:
+        for i, yaku in enumerate(cpu_yakus[:2]):
+            yaku_text = small_font.render(f"• {yaku}", True, (200, 200, 255))
+            screen.blit(yaku_text, (info_display_x, 175 + i * 20))
 
     # プレイヤー手札枚数表示（固定位置）
     player_hand_text = small_font.render(f"プレイヤー手札: {len(player_hand)}枚", True, (255, 255, 255))
@@ -390,6 +694,17 @@ while run:
     # プレイヤー取り札枚数表示（手札枚数の下）
     player_captured_text = small_font.render(f"プレイヤー取り札: {len(player_captured)}枚", True, (255, 255, 255))
     screen.blit(player_captured_text, (info_display_x, screen_height - 175))
+    
+    # プレイヤーポイント表示
+    player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
+    player_score_text = small_font.render(f"プレイヤーポイント: {player_score}文", True, (255, 255, 100))
+    screen.blit(player_score_text, (info_display_x, screen_height - 150))
+    
+    # プレイヤー成立役表示（最大2つまで）
+    if player_yakus:
+        for i, yaku in enumerate(player_yakus[:2]):
+            yaku_text = small_font.render(f"• {yaku}", True, (200, 255, 200))
+            screen.blit(yaku_text, (info_display_x, screen_height - 125 + i * 20))
 
     # 取り札の配置
     draw_sorted_captured_cards(screen, cpu_captured, 50, 10)
@@ -403,14 +718,30 @@ while run:
     draw_captured_highlights(screen)  # 取り札ハイライト表示を描画
     draw_cutin_animations(screen)  # カットインアニメーション描画
 
-    # CPUターンの処理
-    if game_state['turn'] == 'cpu' and len(cpu_hand) > 0 and not is_animations_active():
+    # こいこい選択画面の描画
+    koikoi_buttons = None
+    if game_state['koikoi_choice']:
+        koikoi_buttons = draw_koikoi_choice_screen(screen, game_state, japanese_font, small_font)
+
+    # CPUの選択メッセージ表示
+    if game_state['cpu_choice_display']:
+        draw_cpu_choice_message(screen, game_state['cpu_choice_type'], japanese_font, small_font)
+        game_state['cpu_choice_timer'] -= 1
+        if game_state['cpu_choice_timer'] <= 0:
+            game_state['cpu_choice_display'] = False
+            game_state['cpu_choice_type'] = None
+
+    # CPUターンの処理（こいこい選択中・ゲーム終了後・CPUメッセージ表示中は停止）
+    if (game_state['turn'] == 'cpu' and len(cpu_hand) > 0 and 
+        not is_animations_active() and not game_state['koikoi_choice'] and
+        not game_state['game_over'] and not game_state['cpu_choice_display']):  # ゲーム終了後は停止
         game_state['cpu_timer'] += 1
         if game_state['cpu_timer'] > 90:
             import random
             
             if game_state['cpu_action_phase'] == 'waiting':
-                cpu_card = random.choice(cpu_hand)
+                # 戦略的にカードを選択
+                cpu_card = choose_best_cpu_card(cpu_hand, cpu_captured, field_cards)
                 game_state['selected_cpu_card'] = cpu_card
                 
                 game_state['cpu_action_phase'] = 'card_selected'
@@ -422,15 +753,18 @@ while run:
                     cpu_card = game_state['selected_cpu_card']
                     
                     matched = False
-                    for field_card in field_cards:
-                        if cpu_card.month == field_card.month:
-                            print(f"CPU Match! {cpu_card.name} と {field_card.name} が一致")
-                            cpu_hand.remove(cpu_card)
-                            field_cards.remove(field_card)
-                            
-                            capture_cards_with_animation(cpu_card, field_card, cpu_captured, True, screen_height, screen_width)
-                            matched = True
-                            break
+                    matching_cards = [field_card for field_card in field_cards if field_card.month == cpu_card.month]
+                    if matching_cards:
+                        print(f"CPU Match! {cpu_card.name} と同じ月のカード {len(matching_cards)}枚: {[c.name for c in matching_cards]}")
+                        cpu_hand.remove(cpu_card)
+                        
+                        # 同じ月のカードを全て場札から削除
+                        for matching_card in matching_cards:
+                            field_cards.remove(matching_card)
+                        
+                        # 複数枚取得のアニメーション（新しい関数を使用）
+                        capture_multiple_cards_with_animation(cpu_card, matching_cards, cpu_captured, True, screen_height, screen_width, game_state)
+                        matched = True
                     
                     if not matched:
                         print(f"CPU: {cpu_card.name} を場に出します")
@@ -450,7 +784,7 @@ while run:
                 if not is_animations_active() and game_state['cpu_timer'] > 30:  # 0.5秒遅延
                     # 山札処理前に場札の位置を整形
                     update_field_positions(field_cards)
-                    draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, True, screen_width, screen_height)
+                    draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, True, screen_width, screen_height, game_state)
                     
                     game_state['cpu_action_phase'] = 'waiting'
                     game_state['turn'] = 'player'
@@ -471,7 +805,30 @@ while run:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             
-            if game_state['turn'] == 'player' and not is_animations_active():
+            # こいこい選択の処理
+            if game_state['koikoi_choice'] and koikoi_buttons:
+                agari_x, agari_y, agari_w, agari_h = koikoi_buttons['agari_button']
+                koikoi_x, koikoi_y, koikoi_w, koikoi_h = koikoi_buttons['koikoi_button']
+                
+                if (agari_x <= mx <= agari_x + agari_w and 
+                    agari_y <= my <= agari_y + agari_h):
+                    # 上がりを選択
+                    print("🎯 プレイヤーが上がりを選択！")
+                    game_state['koikoi_choice'] = False
+                    game_state['game_over'] = True
+                    # 結果を設定（とりあえず勝利として処理）
+                    result_text = japanese_font.render("プレイヤーの勝利！", True, (0, 255, 0))
+                    game_state['result_text'] = result_text
+                    
+                elif (koikoi_x <= mx <= koikoi_x + koikoi_w and 
+                      koikoi_y <= my <= koikoi_y + koikoi_h):
+                    # こいこいを選択
+                    print("🔥 プレイヤーがこいこいを選択！")
+                    game_state['koikoi_choice'] = False
+                    # ゲーム続行
+                    
+            elif (game_state['turn'] == 'player' and not is_animations_active() and 
+                  not game_state['koikoi_choice'] and not game_state['game_over']):
                 # 手札選択処理
                 for card in player_hand:
                     card_width = card.get_image().get_width()
@@ -491,12 +848,19 @@ while run:
                         if card.x <= mx <= card.x + card_width and card.y <= my <= card.y + card_height:
                             clicked_field_card = True
                             if game_state['selected_card'].month == card.month:
-                                print(f"Match! {game_state['selected_card'].name} と {card.name} が一致")
+                                # 同じ月のカードを全て検索
+                                matching_cards = [field_card for field_card in field_cards if field_card.month == game_state['selected_card'].month]
+                                print(f"Match! {game_state['selected_card'].name} と同じ月のカード {len(matching_cards)}枚: {[c.name for c in matching_cards]}")
+                                
                                 selected_card = game_state['selected_card']
                                 player_hand.remove(selected_card)
-                                field_cards.remove(card)
                                 
-                                capture_cards_with_animation(selected_card, card, player_captured, False, screen_height, screen_width)
+                                # 同じ月のカードを全て場札から削除
+                                for matching_card in matching_cards:
+                                    field_cards.remove(matching_card)
+                                
+                                # 複数枚取得のアニメーション（新しい関数を使用）
+                                capture_multiple_cards_with_animation(selected_card, matching_cards, player_captured, False, screen_height, screen_width, game_state)
                                 game_state['selected_card'] = None
                                 
                                 # プレイヤーの山札処理を遅延
@@ -531,8 +895,10 @@ while run:
                             game_state['player_yama_pending'] = True
                             game_state['player_yama_delay'] = 60  # 1秒遅延を追加
     
-    # プレイヤーの遅延山札処理
-    if game_state.get('player_yama_pending', False) and not is_animations_active():
+    # プレイヤーの遅延山札処理（こいこい選択中・ゲーム終了後は停止）
+    if (game_state.get('player_yama_pending', False) and 
+        not is_animations_active() and not game_state['koikoi_choice'] and
+        not game_state['game_over']):
         # 遅延カウントがある場合は減少させる
         if game_state.get('player_yama_delay', 0) > 0:
             game_state['player_yama_delay'] -= 1
@@ -540,19 +906,38 @@ while run:
             # 遅延時間が終了したら山札処理を実行
             # 山札処理前に場札の位置を整形
             update_field_positions(field_cards)
-            draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, False, screen_width, screen_height)
+            draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, False, screen_width, screen_height, game_state)
             game_state['player_yama_pending'] = False
             if 'player_yama_delay' in game_state:
                 del game_state['player_yama_delay']  # 遅延カウンタを削除
             game_state['turn'] = 'cpu'
             game_state['cpu_timer'] = 0
     
+    # CPUが役で勝利した場合の処理
+    if (game_state['game_over'] and game_state.get('winner') == 'cpu' and 
+        'result_text' not in game_state):
+        # CPUの役による勝利
+        cpu_score = game_state.get('final_score_cpu', 0)
+        cpu_yakus = game_state.get('final_yakus_cpu', [])
+        
+        print(f"\n=== CPU役による勝利 ===")
+        print(f"CPU最終得点: {cpu_score}文")
+        if cpu_yakus:
+            print("CPUの成立役:")
+            for yaku in cpu_yakus:
+                print(f"  • {yaku}")
+        
+        result_text = japanese_font.render("CPUの勝利！", True, (255, 0, 0))
+        game_state['result_text'] = result_text
+        print("\n💻 CPUの役による勝利！ 💻")
     
-    # ゲーム終了判定（全てのアニメーションが終了してから実行）
+    
+    # ゲーム終了判定（全てのアニメーションが終了してから実行、こいこい選択中は停止）
     if (not game_state['game_over'] and 
         len(player_hand) == 0 and 
         len(cpu_hand) == 0 and 
-        not is_animations_active()):  # アニメーション終了を条件に追加
+        not is_animations_active() and
+        not game_state['koikoi_choice']):  # こいこい選択中は終了判定も停止
         
         # 実際の役計算を実行
         print("=== プレイヤーの役計算 ===")
