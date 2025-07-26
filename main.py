@@ -13,6 +13,7 @@ from logic import (  # ロジックモジュールから各関数をインポー
     is_animations_active,  # アニメーション実行中チェック関数
     draw_overlays,  # 重ね合わせ表示描画関数
     draw_yama_highlights,  # 山札強調表示描画関数
+    process_cutin_queue,  # カットインキュー処理関数
     draw_captured_highlights,  # 新規追加: 取り札ハイライト描画関数
     draw_merge_animations,  # 新規追加: 重なり合いアニメーション描画関数
     draw_normal_animations,  # 新規追加: 通常のアニメーション描画関数
@@ -103,6 +104,16 @@ def setup_test_scenario(test_type, deck):
         # 残りは通常配置
         remaining_player = ['pine_crane', 'cherry_curtain', 'plum_bird', 'wagtail', 'peony_butterfly']
         remaining_field = ['pine_tan', 'cherry_tan', 'plum_tan', 'wisteria_tan']
+        
+    elif test_type == "花見月見" or test_type == "hanami_tsukimi":
+        print("📝 花見酒＋月見酒同時テスト配置を設定")
+        # 花見酒: 桜の幕、菊の杯
+        # 月見酒: 満月、菊の杯（菊の杯が共通）
+        player_cards = ['cherry_curtain', 'full_moon_pampas', 'chrysanthemum_sake_cup']
+        field_card_names = ['cherry_tan', 'pampas_geese', 'chrysanthemum_tan']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'plum_bird', 'wagtail', 'peony_butterfly']
+        remaining_field = ['pine_tan', 'plum_tan', 'wisteria_tan']
         
     else:
         print("❌ 不明なテストタイプ、通常配置にします")
@@ -291,6 +302,9 @@ while run:
     
     # アニメーションの更新
     update_animations()
+    
+    # カットインキューの処理（前のカットインが終了した場合に次を開始）
+    process_cutin_queue(SCREEN_WIDTH, SCREEN_HEIGHT)
     
     # カード描画
     for card in cpu_hand:

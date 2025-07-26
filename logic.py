@@ -7,9 +7,22 @@ active_yama_highlights = []  # アクティブな山札ハイライトのリス�
 active_captured_highlights = []  # 新規追加: アクティブな取り札ハイライトのリスト
 active_merge_animations = []  # 新規追加: アクティブな重なり合いアニメーションのリスト
 active_cutin_animations = []  # 新規追加: アクティブなカットインアニメーションのリスト
+cutin_queue = []  # 新規追加: カットインアニメーションのキュー（順番に再生するため）
 
 # 役状態管理
 previous_player_yakus = []  # プレイヤーの前回の役リスト（新しい役のみカットイン表示するため）
+
+def process_cutin_queue(screen_width, screen_height):
+    """カットインキューを処理する関数（次のカットインアニメーションを開始）"""
+    global cutin_queue, active_cutin_animations
+    
+    # 現在のカットインアニメーションがすべて終了している場合
+    if not active_cutin_animations and cutin_queue:
+        # キューから次の役を取得してカットインアニメーションを開始
+        next_yaku = cutin_queue.pop(0)
+        print(f"🎬 キューから次のカットイン開始: {next_yaku}")
+        cutin_animation = YakuCutInAnimation(next_yaku, screen_width, screen_height)
+        active_cutin_animations.append(cutin_animation)
 
 def update_hand_positions(hand_cards, base_x, base_y, spacing=120):
     """手札の位置を更新する関数（チート機能で手札が変更された時用）
@@ -266,7 +279,7 @@ def get_captured_card_position(captured_list, is_cpu=True, screen_height=800):
 
 def capture_cards_with_animation(hand_card, field_card, captured_list, is_cpu=True, screen_height=800, screen_width=1200):
     """アニメーション付きでカードを取得する関数（カットイン対応版）"""
-    global active_merge_animations, active_captured_highlights, active_cutin_animations, active_animations, previous_player_yakus  # グローバル変数を使用
+    global active_merge_animations, active_captured_highlights, active_cutin_animations, active_animations, previous_player_yakus, cutin_queue  # グローバル変数を使用
     
     # 取得先の位置を計算
     end_x, end_y = get_captured_card_position(captured_list, is_cpu, screen_height)
@@ -289,17 +302,32 @@ def capture_cards_with_animation(hand_card, field_card, captured_list, is_cpu=Tr
         
         # 新しく役が成立した場合、カットインを表示
         if new_yakus:
-            for yaku in new_yakus:
-                print(f"🎊 新しい役成立でカットイン発生: {yaku}")
-                cutin_triggered = True
-                # すべてのアニメーションを停止
-                active_animations.clear()
-                active_merge_animations.clear()
-                active_captured_highlights.clear()
-                # カットインアニメーションを作成（最初の新しい役のみ）
-                cutin_animation = YakuCutInAnimation(yaku, screen_width, screen_height)
+            print(f"🎊 新しい役成立: {new_yakus}")
+            cutin_triggered = True
+            # すべてのアニメーションを停止
+            active_animations.clear()
+            active_merge_animations.clear()
+            active_captured_highlights.clear()
+            
+            # 複数の役がある場合は最初の1つを即座に開始し、残りをキューに追加
+            if len(new_yakus) == 1:
+                # 1つの役の場合は即座にカットイン開始
+                cutin_animation = YakuCutInAnimation(new_yakus[0], screen_width, screen_height)
                 active_cutin_animations.append(cutin_animation)
-                break  # 複数の新しい役がある場合は最初の1つのみ表示
+                print(f"🎬 カットイン即座開始: {new_yakus[0]}")
+            else:
+                # 複数の役の場合は最初の1つを開始し、残りをキューに追加
+                first_yaku = new_yakus[0]
+                remaining_yakus = new_yakus[1:]
+                
+                cutin_animation = YakuCutInAnimation(first_yaku, screen_width, screen_height)
+                active_cutin_animations.append(cutin_animation)
+                print(f"🎬 最初のカットイン開始: {first_yaku}")
+                
+                # 残りの役をキューに追加
+                cutin_queue.extend(remaining_yakus)
+                print(f"📝 キューに追加された役: {remaining_yakus}")
+                print(f"📋 現在のキュー状態: {cutin_queue}")
         
         # プレイヤーの役状態を更新
         previous_player_yakus = achieved_yakus.copy()
