@@ -1,6 +1,8 @@
 import pygame  # Pygameライブラリをインポート
 from cards import cards  # カードデータをインポート
 import os  # OSモジュールをインポート（ファイルパス操作用）
+import sys  # コマンドライン引数処理用
+import random  # ランダム処理用
 from deck import Deck  # デッキクラスをインポート
 from logic import (  # ロジックモジュールから各関数をインポート
     draw_sorted_captured_cards,  # 取り札描画関数
@@ -23,7 +25,6 @@ from logic import (  # ロジックモジュールから各関数をインポー
 
 pygame.init()  # Pygameを初期化
 
-
 def get_japanese_font(size=36):
     font_path = [
         "C:/Windows/Fonts/msgothic.ttc",  # MSゴシックフォントのパス
@@ -39,10 +40,133 @@ def get_japanese_font(size=36):
     # すべてのフォントが見つからない場合はデフォルトフォントを返す
     return pygame.font.Font(None, size)
 
-# 画面サイズを大きく変更
+def setup_test_scenario(test_type, deck):
+    """テスト用のカード配置を設定する関数
+    Args:
+        test_type: テストタイプ（3=三光、5=五光、など）
+        deck: デッキオブジェクト
+    Returns:
+        tuple: (player_hand, cpu_hand, field_cards, yama_deck)
+    """
+    print(f"🎮 テストモード: {test_type}を設定中...")
+    
+    # カードを名前で検索するヘルパー関数
+    def find_card(card_name):
+        for card in deck.cards:
+            if card.name == card_name:
+                return card
+        return None
+    
+    if test_type == "3":  # 三光テスト
+        print("📝 三光テスト配置を設定")
+        # 三光に必要なカード: 松の鶴、桜の幕、満月
+        player_cards = ['pine_crane', 'cherry_curtain', 'full_moon_pampas']
+        # 対応する場札（同じ月のカード）
+        field_card_names = ['pine_tan', 'cherry_tan', 'pampas_geese']
+        # 残りは通常配置
+        remaining_player = ['plum_bird', 'wagtail', 'peony_butterfly', 'boar']
+        remaining_field = ['plum_tan', 'wisteria_tan', 'peony_tan']
+        
+    elif test_type == "5":  # 五光テスト
+        print("📝 五光テスト配置を設定")
+        # 五光に必要なカード: 松の鶴、桜の幕、満月、雨の柳、桐の鳳凰
+        player_cards = ['pine_crane', 'cherry_curtain', 'full_moon_pampas', 'michikaze_willows', 'paulownia_phoenix']
+        # 対応する場札
+        field_card_names = ['pine_tan', 'cherry_tan', 'pampas_geese', 'willows_tan', 'paulownia_1']
+        # 残りは通常配置
+        remaining_player = ['plum_bird', 'wagtail']
+        remaining_field = ['plum_tan']
+        
+    elif test_type == "猪鹿蝶" or test_type == "inosika":
+        print("📝 猪鹿蝶テスト配置を設定")
+        # 猪鹿蝶: 萩の猪、鹿、牡丹の蝶
+        player_cards = ['boar', 'maple_deer', 'peony_butterfly']
+        field_card_names = ['bush_clover_tan', 'maple_tan', 'peony_tan']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'cherry_curtain', 'full_moon_pampas', 'wagtail']
+        remaining_field = ['pine_tan', 'cherry_tan', 'pampas_geese']
+        
+    elif test_type == "花見酒" or test_type == "hanami":
+        print("📝 花見酒テスト配置を設定")
+        # 花見酒: 桜の幕、菊の杯
+        player_cards = ['cherry_curtain', 'chrysanthemum_sake_cup']
+        field_card_names = ['cherry_tan', 'chrysanthemum_tan']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'full_moon_pampas', 'plum_bird', 'wagtail', 'peony_butterfly']
+        remaining_field = ['pine_tan', 'pampas_geese', 'plum_tan', 'wisteria_tan']
+        
+    elif test_type == "月見酒" or test_type == "tsukimi":
+        print("📝 月見酒テスト配置を設定")
+        # 月見酒: 満月、菊の杯
+        player_cards = ['full_moon_pampas', 'chrysanthemum_sake_cup']
+        field_card_names = ['pampas_geese', 'chrysanthemum_tan']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'cherry_curtain', 'plum_bird', 'wagtail', 'peony_butterfly']
+        remaining_field = ['pine_tan', 'cherry_tan', 'plum_tan', 'wisteria_tan']
+        
+    else:
+        print("❌ 不明なテストタイプ、通常配置にします")
+        return None  # 通常のシャッフル配置を使用
+    
+    # カードを実際に検索して配置
+    player_hand = []
+    field_cards = []
+    used_cards = set()
+    
+    # プレイヤー手札の設定
+    for card_name in player_cards:
+        card = find_card(card_name)
+        if card:
+            player_hand.append(card)
+            used_cards.add(card)
+            print(f"  🃏 プレイヤー手札: {card.name}")
+    
+    # 残りのプレイヤー手札
+    for card_name in remaining_player:
+        if len(player_hand) >= 7:
+            break
+        card = find_card(card_name)
+        if card and card not in used_cards:
+            player_hand.append(card)
+            used_cards.add(card)
+    
+    # 場札の設定
+    for card_name in field_card_names:
+        card = find_card(card_name)
+        if card and card not in used_cards:
+            field_cards.append(card)
+            used_cards.add(card)
+            print(f"  🎴 場札: {card.name}")
+    
+    # 残りの場札
+    for card_name in remaining_field:
+        if len(field_cards) >= 6:
+            break
+        card = find_card(card_name)
+        if card and card not in used_cards:
+            field_cards.append(card)
+            used_cards.add(card)
+    
+    # CPU手札（残りからランダム選択）
+    remaining_cards = [card for card in deck.cards if card not in used_cards]
+    random.shuffle(remaining_cards)
+    cpu_hand = remaining_cards[:7]
+    used_cards.update(cpu_hand)
+    
+    # 山札（残りすべて）
+    yama_deck = [card for card in deck.cards if card not in used_cards]
+    random.shuffle(yama_deck)
+    
+    print(f"✅ テスト配置完了: プレイヤー{len(player_hand)}枚, CPU{len(cpu_hand)}枚, 場札{len(field_cards)}枚, 山札{len(yama_deck)}枚")
+    
+    return player_hand, cpu_hand, field_cards, yama_deck
+
+# 画面サイズを大きく変更（グローバル変数として定義）
 d = pygame.display.get_desktop_sizes()[0]  # デスクトップサイズを取得
-screen_width = int(d[0]*0.8)  # 画面幅をデスクトップの80%に設定
-screen_height = int(d[1]*0.8)  # 画面高さをデスクトップの80%に設定
+SCREEN_WIDTH = int(d[0]*0.8)  # 画面幅をデスクトップの80%に設定（グローバル変数）
+SCREEN_HEIGHT = int(d[1]*0.8)  # 画面高さをデスクトップの80%に設定（グローバル変数）
+screen_width = SCREEN_WIDTH  # 互換性のための変数
+screen_height = SCREEN_HEIGHT  # 互換性のための変数
 screen = pygame.display.set_mode((screen_width, screen_height))  # ウィンドウを作成
 pygame.display.set_caption("花札")  # ウィンドウタイトルを設定
 
@@ -65,13 +189,38 @@ small_font = get_japanese_font(24)  # 小さめのフォントを取得
 
 # デッキ準備
 deck = Deck(cards)
-deck.shuffle()
 
-# 手札7枚、場札6枚
-player_hand = deck.deal(7)
-cpu_hand = deck.deal(7)
-field_cards = deck.deal(6)
-yama_deck = deck.cards[:]
+# 役状態をリセット（新しいゲーム開始時）
+from logic import previous_player_yakus
+previous_player_yakus.clear()
+print("💫 新しいゲーム開始 - 役状態をリセット")
+
+# コマンドライン引数をチェック
+test_mode = None
+if len(sys.argv) > 1:
+    test_mode = sys.argv[1]
+    print(f"🎯 テストモード指定: {test_mode}")
+
+# カード配置の設定
+if test_mode:
+    # テスト配置
+    result = setup_test_scenario(test_mode, deck)
+    if result:
+        player_hand, cpu_hand, field_cards, yama_deck = result
+    else:
+        # テスト失敗時は通常配置
+        deck.shuffle()
+        player_hand = deck.deal(7)
+        cpu_hand = deck.deal(7)
+        field_cards = deck.deal(6)
+        yama_deck = deck.cards[:]
+else:
+    # 通常配置
+    deck.shuffle()
+    player_hand = deck.deal(7)
+    cpu_hand = deck.deal(7)
+    field_cards = deck.deal(6)
+    yama_deck = deck.cards[:]
 
 # 取り札を保存するリスト
 player_captured = []
@@ -118,10 +267,21 @@ game_state = {
     'game_over': False,  # ゲーム終了フラグを追加
 }
 
+# テストモード情報を表示
+if test_mode:
+    print(f"\n🎮 {test_mode} テストモード開始！")
+    print("プレイヤー手札:")
+    for card in player_hand:
+        print(f"  🃏 {card.name}")
+    print("場札:")
+    for card in field_cards:
+        print(f"  🎴 {card.name}")
+    print("=" * 50)
+
 
 pygame.mixer.init()  # Pygameのミキサーを初期化
 pygame.mixer.music.load("assets/sound/茶屋にて.mp3")  # BGMの読み込み
-pygame.mixer.music.set_volume(0.5)  # BGMの音量を設定
+pygame.mixer.music.set_volume(0.1)  # BGMの音量を設定
 pygame.mixer.music.play(-1)  # BGMをループ再生
 
 # メインループ
@@ -254,7 +414,7 @@ while run:
                             cpu_hand.remove(cpu_card)
                             field_cards.remove(field_card)
                             
-                            capture_cards_with_animation(cpu_card, field_card, cpu_captured, True, screen_height)
+                            capture_cards_with_animation(cpu_card, field_card, cpu_captured, True, screen_height, screen_width)
                             matched = True
                             break
                     
@@ -322,7 +482,7 @@ while run:
                                 player_hand.remove(selected_card)
                                 field_cards.remove(card)
                                 
-                                capture_cards_with_animation(selected_card, card, player_captured, False, screen_height)
+                                capture_cards_with_animation(selected_card, card, player_captured, False, screen_height, screen_width)
                                 game_state['selected_card'] = None
                                 
                                 # プレイヤーの山札処理を遅延

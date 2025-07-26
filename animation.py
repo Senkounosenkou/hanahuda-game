@@ -4,14 +4,18 @@ import os  # ファイル操作用
 
 class CardMergeAnimation:
     """2枚のカードが重なり合いながら移動するアニメーションクラス（修正版）"""
-    def __init__(self, hand_card, field_card, end_x, end_y, duration=240):
+    def __init__(self, hand_card, field_card, end_x, end_y, duration=120):
         """重なり合いアニメーションの初期化
         Args:
             hand_card: 手札カード
             field_card: 場札カード
-            end_x: 最終到達x座標
+            end_x: 最終                    # 画面サイズに応じた適切なサイズを計算（画面幅の20%程度を目安）
+                    target_width = int(self.screen_width * 0.2)
+                    scale_factor = target_width / original_width
+                    scaled_width = int(original_width * scale_factor)
+                    scaled_height = int(original_height * scale_factor)
             end_y: 最終到達y座標
-            duration: アニメーション時間（フレーム数、デフォルト240=4秒）
+            duration: アニメーション時間（フレーム数、デフォルト120=2秒、2倍速）
         """
         self.hand_card = hand_card  # 手札カード
         self.field_card = field_card  # 場札カード
@@ -33,10 +37,10 @@ class CardMergeAnimation:
         self.merge_x = field_card.x
         self.merge_y = field_card.y
         
-        # 3段階のアニメーション時間配分
-        self.phase1_duration = 80  # フェーズ1: 手札が場札に移動（約1.3秒）
-        self.phase2_duration = 40  # フェーズ2: 重なった状態で停止（約0.7秒）
-        self.phase3_duration = 120  # フェーズ3: 重なって取り札エリアに移動（2秒）
+        # 3段階のアニメーション時間配分（2倍速）
+        self.phase1_duration = 40  # フェーズ1: 手札が場札に移動（約0.65秒）
+        self.phase2_duration = 20  # フェーズ2: 重なった状態で停止（約0.35秒）
+        self.phase3_duration = 60  # フェーズ3: 重なって取り札エリアに移動（1秒）
         
     def update(self):
         """重なり合いアニメーションの更新処理（完全修正版）"""
@@ -106,7 +110,7 @@ class CardMergeAnimation:
 
 class CardAnimation:
     """カードのアニメーション管理クラス（改良版）"""
-    def __init__(self, card, start_x, start_y, end_x, end_y, duration=120):  # 修正: 60→120フレーム（2秒）
+    def __init__(self, card, start_x, start_y, end_x, end_y, duration=60):  # 修正: 60フレーム（1秒、2倍速）
         """アニメーション初期化
         Args:
             card: アニメーション対象のカード
@@ -114,7 +118,7 @@ class CardAnimation:
             start_y: 開始y座標
             end_x: 終了x座標
             end_y: 終了y座標
-            duration: アニメーション時間（フレーム数、デフォルト120=2秒）
+            duration: アニメーション時間（フレーム数、デフォルト60=1秒、2倍速）
         """
         self.card = card  # アニメーションするカードオブジェクト
         self.start_x = start_x  # アニメーション開始のx座標
@@ -206,12 +210,12 @@ class CardOverlayDisplay:
 
 class YamaCardHighlight:
     """山札カードハイライト表示クラス"""
-    def __init__(self, drawn_card, matched_field_card, display_duration=60):  # 修正: 90→60フレーム
+    def __init__(self, drawn_card, matched_field_card, display_duration=30):  # 修正: 30フレーム（0.5秒、2倍速）
         """山札ハイライト表示の初期化
         Args:
             drawn_card: 引いた山札カード
             matched_field_card: マッチした場札カード
-            display_duration: 表示時間（フレーム数、短縮）
+            display_duration: 表示時間（フレーム数、2倍速）
         """
         self.drawn_card = drawn_card  # 山札から引いたカード
         self.matched_field_card = matched_field_card  # マッチした場札カード
@@ -241,11 +245,11 @@ class YamaCardHighlight:
 
 class CapturedCardHighlight:
     """取り札エリアの同じ月のカードをハイライト表示するクラス"""
-    def __init__(self, cards_to_highlight, display_duration=10):  # 0.1秒間光らせる
+    def __init__(self, cards_to_highlight, display_duration=15):  # 0.25秒間光らせる（2倍速）
         """取り札ハイライト表示の初期化
         Args:
             cards_to_highlight: ハイライトするカードのリスト
-            display_duration: 表示時間（フレーム数、デフォルト120=2秒）
+            display_duration: 表示時間（フレーム数、デフォルト15=0.25秒、2倍速）
         """
         self.cards_to_highlight = cards_to_highlight  # ハイライトするカードのリスト
         self.display_duration = display_duration  # 表示時間
@@ -289,13 +293,13 @@ class CapturedCardHighlight:
 
 class YakuCutInAnimation:
     """役ができた時のカットインアニメーションクラス"""
-    def __init__(self, yaku_name, screen_width, screen_height, duration=180):
+    def __init__(self, yaku_name, screen_width, screen_height, duration=90):
         """カットインアニメーションの初期化
         Args:
             yaku_name: 役の名前（例："五光", "猪鹿蝶"など）
             screen_width: 画面幅
             screen_height: 画面高さ
-            duration: アニメーション時間（フレーム数、デフォルト180=3秒）
+            duration: アニメーション時間（フレーム数、デフォルト90=1.5秒、2倍速）
         """
         self.yaku_name = yaku_name
         self.screen_width = screen_width
@@ -312,14 +316,20 @@ class YakuCutInAnimation:
         print(f"🎬 YakuCutInAnimation初期化: {yaku_name}")
         print(f"   画像読み込み結果: {'成功' if self.cutin_image else 'テキストモード'}")
         
-        # アニメーション段階
-        self.phase1_duration = 30  # スライドイン（0.5秒）
-        self.phase2_duration = 120  # 表示停止（2秒）
-        self.phase3_duration = 30  # スライドアウト（0.5秒）
+        # アニメーション段階（2倍速）
+        self.phase1_duration = 15  # スライドイン（0.25秒）
+        self.phase2_duration = 60  # 表示停止（1秒）
+        self.phase3_duration = 15  # スライドアウト（0.25秒）
         
         # アニメーション位置計算
-        self.image_width = 600 if self.cutin_image else 400
-        self.image_height = 200 if self.cutin_image else 100
+        if self.cutin_image:
+            self.image_width = self.cutin_image.get_width()
+            self.image_height = self.cutin_image.get_height()
+        else:
+            # テキストモードの場合のデフォルトサイズ
+            self.image_width = 400
+            self.image_height = 100
+            
         self.start_x = -self.image_width  # 画面左外から開始
         self.end_x = (screen_width - self.image_width) // 2  # 画面中央
         self.exit_x = screen_width  # 画面右外へ退場
@@ -328,25 +338,59 @@ class YakuCutInAnimation:
         # 現在位置
         self.current_x = self.start_x
         
+        print(f"   カットイン画像サイズ: {self.image_width} x {self.image_height}")
+        print(f"   アニメーション位置: start={self.start_x}, center={self.end_x}, exit={self.exit_x}, y={self.y}")
+        
     def load_cutin_image(self):
         """カットイン画像の読み込み"""
         try:
-            # 役名に応じた画像ファイルを探索
+            # 役名から点数部分を除去（例："三光 (5文)" → "三光"）
+            clean_yaku_name = self.yaku_name.split(' ')[0]  # スペースの前の部分を取得
+            
+            # 役名に応じた画像ファイルを探索（cutinフォルダ内）
             base_dir = os.path.dirname(__file__)
-            image_path = os.path.join(base_dir, "assets", "img", f"{self.yaku_name}_cutin.png")
+            image_path = os.path.join(base_dir, "assets", "img", "cutin", f"{clean_yaku_name}_cutin.png")
+            
+            print(f"   カットイン画像パス: {image_path}")
+            print(f"   元の役名: {self.yaku_name} → クリーン役名: {clean_yaku_name}")
             
             if os.path.exists(image_path):
-                self.cutin_image = pygame.image.load(image_path)
-                self.cutin_image = pygame.transform.scale(self.cutin_image, (600, 200))
+                original_image = pygame.image.load(image_path)
+                # 元の画像サイズを取得
+                original_width = original_image.get_width()
+                original_height = original_image.get_height()
+                # 画面サイズに応じた適切なサイズを計算（画面幅の50%程度を目安）
+                target_width = int(self.screen_width * 0.5)
+                scale_factor = target_width / original_width
+                scaled_width = int(original_width * scale_factor)
+                scaled_height = int(original_height * scale_factor)
+                
+                self.cutin_image = pygame.transform.scale(original_image, (scaled_width, scaled_height))
+                print(f"   カットイン画像読み込み成功: {image_path}")
+                print(f"   元のサイズ: {original_width}x{original_height} → スケール後: {scaled_width}x{scaled_height} (倍率: {scale_factor:.2f})")
             else:
                 # 画像が見つからない場合はデフォルト画像を探索
-                default_path = os.path.join(base_dir, "assets", "img", "default_cutin.png")
+                default_path = os.path.join(base_dir, "assets", "img", "cutin", "default_cutin.png")
                 if os.path.exists(default_path):
-                    self.cutin_image = pygame.image.load(default_path)
-                    self.cutin_image = pygame.transform.scale(self.cutin_image, (600, 200))
+                    original_image = pygame.image.load(default_path)
+                    # 元の画像サイズを取得
+                    original_width = original_image.get_width()
+                    original_height = original_image.get_height()
+                    
+                    # 画面サイズに応じた適切なサイズを計算（画面幅の30%程度を目安）
+                    target_width = int(self.screen_width * 0.3)
+                    scale_factor = target_width / original_width
+                    scaled_width = int(original_width * scale_factor)
+                    scaled_height = int(original_height * scale_factor)
+                    
+                    self.cutin_image = pygame.transform.scale(original_image, (scaled_width, scaled_height))
+                    print(f"   デフォルトカットイン画像読み込み成功: {default_path}")
+                    print(f"   元のサイズ: {original_width}x{original_height} → スケール後: {scaled_width}x{scaled_height} (倍率: {scale_factor:.2f})")
                 else:
+                    print(f"   カットイン画像が見つかりません: {image_path}")
                     self.cutin_image = None
-        except:
+        except Exception as e:
+            print(f"   カットイン画像読み込みエラー: {e}")
             self.cutin_image = None
     
     def update(self):
@@ -391,15 +435,22 @@ class YakuCutInAnimation:
             screen.blit(self.cutin_image, (int(self.current_x), self.y))
         else:
             # 画像がない場合はテキストベースのカットインを表示
-            # 背景矩形（半透明黒）
+            # 背景矩形（濃い赤色のグラデーション）
             bg_rect = pygame.Rect(int(self.current_x), self.y, self.image_width, self.image_height)
             bg_surface = pygame.Surface((self.image_width, self.image_height))
-            bg_surface.set_alpha(200)
-            bg_surface.fill((0, 0, 0))
+            bg_surface.set_alpha(220)
+            
+            # グラデーション効果（簡易版）
+            for i in range(self.image_height):
+                alpha = int(220 * (1 - i / self.image_height * 0.3))
+                color = (min(255, 100 + i), 20, 20)  # 赤系グラデーション
+                pygame.draw.line(bg_surface, color, (0, i), (self.image_width, i))
+            
             screen.blit(bg_surface, (int(self.current_x), self.y))
             
-            # 枠線（金色）
-            pygame.draw.rect(screen, (255, 215, 0), bg_rect, 5)
+            # 二重枠線（金色と白）
+            pygame.draw.rect(screen, (255, 215, 0), bg_rect, 8)  # 外側金色
+            pygame.draw.rect(screen, (255, 255, 255), bg_rect, 3)  # 内側白色
             
             # テキスト表示（日本語フォント必要）
             try:
@@ -414,23 +465,37 @@ class YakuCutInAnimation:
                 font = None
                 for path in font_paths:
                     if os.path.exists(path):
-                        font = pygame.font.Font(path, 48)
+                        font = pygame.font.Font(path, 56)  # フォントサイズを大きく
                         break
                 
                 if font is None:
-                    font = pygame.font.Font(None, 48)
+                    font = pygame.font.Font(None, 56)
                 
-                # 役名テキスト
+                # 役名テキスト（影付き）
+                # 影
+                shadow_surface = font.render(self.yaku_name, True, (0, 0, 0))
+                shadow_rect = shadow_surface.get_rect(center=(int(self.current_x) + self.image_width//2 + 3, self.y + self.image_height//2 - 15 + 3))
+                screen.blit(shadow_surface, shadow_rect)
+                # 本体
                 text_surface = font.render(self.yaku_name, True, (255, 255, 255))
-                text_rect = text_surface.get_rect(center=(int(self.current_x) + self.image_width//2, self.y + self.image_height//2 - 20))
+                text_rect = text_surface.get_rect(center=(int(self.current_x) + self.image_width//2, self.y + self.image_height//2 - 15))
                 screen.blit(text_surface, text_rect)
                 
-                # 「役」テキスト
-                yaku_text = font.render("役", True, (255, 215, 0))
-                yaku_rect = yaku_text.get_rect(center=(int(self.current_x) + self.image_width//2, self.y + self.image_height//2 + 30))
+                # 「役成立！」テキスト（小さめフォント）
+                small_font = pygame.font.Font(font.get_fontname() if hasattr(font, 'get_fontname') else None, 32)
+                if small_font is None:
+                    small_font = pygame.font.Font(None, 32)
+                    
+                # 影
+                yaku_shadow = small_font.render("役成立！", True, (0, 0, 0))
+                yaku_shadow_rect = yaku_shadow.get_rect(center=(int(self.current_x) + self.image_width//2 + 2, self.y + self.image_height//2 + 35 + 2))
+                screen.blit(yaku_shadow, yaku_shadow_rect)
+                # 本体
+                yaku_text = small_font.render("役成立！", True, (255, 215, 0))
+                yaku_rect = yaku_text.get_rect(center=(int(self.current_x) + self.image_width//2, self.y + self.image_height//2 + 35))
                 screen.blit(yaku_text, yaku_rect)
                 
-            except:
+            except Exception as e:
                 # フォント読み込みに失敗した場合のフォールバック
                 font = pygame.font.Font(None, 48)
                 text_surface = font.render(f"{self.yaku_name} YAKU!", True, (255, 255, 255))
