@@ -118,19 +118,28 @@ def choose_best_cpu_card(cpu_hand, cpu_captured, field_cards):
     # 全てのカードの優先度を計算
     card_priorities = [(card, get_card_priority(card)) for card in cpu_hand]
     
-    # 優先度順にソート（降順）
-    card_priorities.sort(key=lambda x: x[1], reverse=True)
+    # 取れるカードがあるかチェック（優先度1000以上は場札とマッチするカード）
+    can_capture = any(priority >= 1000 for card, priority in card_priorities)
     
-    # デバッグ情報を出力
-    print("🤖 CPU カード選択分析:")
-    for card, priority in card_priorities:
-        matching = [fc.name for fc in field_cards if fc.month == card.month]
-        match_info = f" -> {matching}" if matching else " (マッチなし)"
-        print(f"  {card.name}: 優先度{priority}{match_info}")
-    
-    # 最高優先度のカードを選択
-    best_card = card_priorities[0][0]
-    print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]})")
+    if can_capture:
+        # 取れるカードがある場合：最高優先度のカードを選択
+        card_priorities.sort(key=lambda x: x[1], reverse=True)
+        best_card = card_priorities[0][0]
+        print("🤖 CPU カード選択分析（取得可能）:")
+        for card, priority in card_priorities:
+            matching = [fc.name for fc in field_cards if fc.month == card.month]
+            match_info = f" -> {matching}" if matching else " (マッチなし)"
+            print(f"  {card.name}: 優先度{priority}{match_info}")
+        print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]}) - 取得")
+    else:
+        # 取れるカードがない場合：一番安いカード（最低優先度）を捨てる
+        card_priorities.sort(key=lambda x: x[1])  # 昇順ソート（低い優先度が先）
+        best_card = card_priorities[0][0]
+        print("🤖 CPU カード選択分析（捨て札）:")
+        for card, priority in card_priorities:
+            card_type = get_card_type_by_name(card.name)
+            print(f"  {card.name}: 優先度{priority} ({card_type})")
+        print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]}) - 捨て札")
     
     return best_card
 
@@ -240,6 +249,64 @@ def draw_cpu_choice_message(screen, choice_type, japanese_font, small_font):
     cpu_label = small_font.render("CPU", True, (200, 200, 200))
     cpu_rect = cpu_label.get_rect(center=(SCREEN_WIDTH//2, box_y + 30))
     screen.blit(cpu_label, cpu_rect)
+    
+    # メインメッセージ
+    main_message = japanese_font.render(main_text, True, text_color)
+    main_rect = main_message.get_rect(center=(SCREEN_WIDTH//2, box_y + 80))
+    screen.blit(main_message, main_rect)
+    
+    # サブメッセージ
+    sub_message = small_font.render(sub_text, True, (255, 255, 255))
+    sub_rect = sub_message.get_rect(center=(SCREEN_WIDTH//2, box_y + 130))
+    screen.blit(sub_message, sub_rect)
+
+def draw_winner_message(screen, winner_type, japanese_font, small_font):
+    """勝利者メッセージを表示する関数（CPU選択メッセージと同じスタイル）
+    Args:
+        screen: 描画対象のスクリーン
+        winner_type: 勝利者タイプ（'player', 'cpu', 'draw'）
+        japanese_font: 日本語フォント
+        small_font: 小さいフォント
+    """
+    # 半透明の背景オーバーレイ
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(150)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # メッセージボックス
+    box_width = 500
+    box_height = 200
+    box_x = (SCREEN_WIDTH - box_width) // 2
+    box_y = (SCREEN_HEIGHT - box_height) // 2
+    
+    # 背景色とメッセージを勝利者に応じて設定
+    if winner_type == "player":
+        bg_color = (50, 100, 150)  # 青系（プレイヤー勝利）
+        main_text = "プレイヤーの勝利！"
+        sub_text = "おめでとうございます"
+        text_color = (100, 200, 255)
+        label_text = "PLAYER"
+    elif winner_type == "cpu":
+        bg_color = (150, 50, 50)  # 赤系（CPU勝利）
+        main_text = "CPUの勝利！"
+        sub_text = "CPUの勝利です"
+        text_color = (255, 150, 150)
+        label_text = "CPU"
+    else:  # draw
+        bg_color = (100, 100, 50)  # 黄系（引き分け）
+        main_text = "引き分け！"
+        sub_text = "同点です"
+        text_color = (255, 255, 150)
+        label_text = "DRAW"
+    
+    pygame.draw.rect(screen, bg_color, (box_x, box_y, box_width, box_height))
+    pygame.draw.rect(screen, (255, 255, 255), (box_x, box_y, box_width, box_height), 3)
+    
+    # ラベル
+    label = small_font.render(label_text, True, (200, 200, 200))
+    label_rect = label.get_rect(center=(SCREEN_WIDTH//2, box_y + 30))
+    screen.blit(label, label_rect)
     
     # メインメッセージ
     main_message = japanese_font.render(main_text, True, text_color)
@@ -731,6 +798,14 @@ while run:
             game_state['cpu_choice_display'] = False
             game_state['cpu_choice_type'] = None
 
+    # 勝利者メッセージ表示
+    if game_state.get('winner_display', False):
+        draw_winner_message(screen, game_state['winner_type'], japanese_font, small_font)
+        game_state['winner_timer'] -= 1
+        if game_state['winner_timer'] <= 0:
+            game_state['winner_display'] = False
+            game_state['winner_type'] = None
+
     # CPUターンの処理（こいこい選択中・ゲーム終了後・CPUメッセージ表示中は停止）
     if (game_state['turn'] == 'cpu' and len(cpu_hand) > 0 and 
         not is_animations_active() and not game_state['koikoi_choice'] and
@@ -816,9 +891,10 @@ while run:
                     print("🎯 プレイヤーが上がりを選択！")
                     game_state['koikoi_choice'] = False
                     game_state['game_over'] = True
-                    # 結果を設定（とりあえず勝利として処理）
-                    result_text = japanese_font.render("プレイヤーの勝利！", True, (0, 255, 0))
-                    game_state['result_text'] = result_text
+                    # プレイヤー勝利メッセージを設定
+                    game_state['winner_display'] = True
+                    game_state['winner_type'] = 'player'
+                    game_state['winner_timer'] = 120  # 2秒間表示
                     
                 elif (koikoi_x <= mx <= koikoi_x + koikoi_w and 
                       koikoi_y <= my <= koikoi_y + koikoi_h):
@@ -915,7 +991,7 @@ while run:
     
     # CPUが役で勝利した場合の処理
     if (game_state['game_over'] and game_state.get('winner') == 'cpu' and 
-        'result_text' not in game_state):
+        'winner_display' not in game_state):
         # CPUの役による勝利
         cpu_score = game_state.get('final_score_cpu', 0)
         cpu_yakus = game_state.get('final_yakus_cpu', [])
@@ -927,8 +1003,10 @@ while run:
             for yaku in cpu_yakus:
                 print(f"  • {yaku}")
         
-        result_text = japanese_font.render("CPUの勝利！", True, (255, 0, 0))
-        game_state['result_text'] = result_text
+        # CPU勝利メッセージを設定
+        game_state['winner_display'] = True
+        game_state['winner_type'] = 'cpu'
+        game_state['winner_timer'] = 120  # 2秒間表示
         print("\n💻 CPUの役による勝利！ 💻")
     
     
@@ -978,27 +1056,27 @@ while run:
             print("CPU: 役なし")
 
         if player_score > cpu_score:
-            result_text = japanese_font.render("プレイヤーの勝利！", True, (0, 255, 0))
             print("\n🎊 プレイヤーの勝利！ 🎊")
             game_state['game_over'] = True
+            # プレイヤー勝利メッセージを設定
+            game_state['winner_display'] = True
+            game_state['winner_type'] = 'player'
+            game_state['winner_timer'] = 120  # 2秒間表示
         elif cpu_score > player_score:
-            result_text = japanese_font.render("CPUの勝利！", True, (255, 0, 0))
             print("\n💻 CPUの勝利！ 💻")
             game_state['game_over'] = True
+            # CPU勝利メッセージを設定
+            game_state['winner_display'] = True
+            game_state['winner_type'] = 'cpu'
+            game_state['winner_timer'] = 120  # 2秒間表示
         else:
-            result_text = japanese_font.render("引き分け！", True, (255, 255, 0))
             print("\n🤝 引き分け！ 🤝")
             game_state['game_over'] = True
-        
-        # 結果テキストをgame_stateに保存
-        game_state['result_text'] = result_text
+            # 引き分けメッセージを設定
+            game_state['winner_display'] = True
+            game_state['winner_type'] = 'draw'
+            game_state['winner_timer'] = 120  # 2秒間表示
     
-    # ゲーム終了後の結果表示
-    if game_state['game_over'] and 'result_text' in game_state:
-        # 結果を画面中央に表示
-        text_rect = game_state['result_text'].get_rect(center=(screen_width//2, screen_height//2))
-        screen.blit(game_state['result_text'], text_rect)
-
     pygame.display.update()
     clock.tick(FPS)
 
