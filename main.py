@@ -555,8 +555,11 @@ card_width = cards[0].get_image().get_width()
 # 手札7枚分の右端座標を計算
 info_display_x = 50 + 6 * (card_width + 10) + card_width + 20
 
+# first_player = random.choice(['player', 'cpu'])  # 最初のプレイヤーをランダムに決定
+# print(f"🎲 最初のプレイヤー: {first_player}")
+
 game_state = {
-    'turn': 'player',
+    'turn': 'player',   #'turn': first_player,
     'selected_card': None,
     'cpu_timer': 0,
     'cpu_action_phase': 'waiting',
