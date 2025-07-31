@@ -119,19 +119,28 @@ def choose_best_cpu_card(cpu_hand, cpu_captured, field_cards):
     # 全てのカードの優先度を計算
     card_priorities = [(card, get_card_priority(card)) for card in cpu_hand]
     
-    # 優先度順にソート（降順）
-    card_priorities.sort(key=lambda x: x[1], reverse=True)
+    # 取れるカードがあるかチェック（優先度1000以上は場札とマッチするカード）
+    can_capture = any(priority >= 1000 for card, priority in card_priorities)
     
-    # デバッグ情報を出力
-    print("🤖 CPU カード選択分析:")
-    for card, priority in card_priorities:
-        matching = [fc.name for fc in field_cards if fc.month == card.month]
-        match_info = f" -> {matching}" if matching else " (マッチなし)"
-        print(f"  {card.name}: 優先度{priority}{match_info}")
-    
-    # 最高優先度のカードを選択
-    best_card = card_priorities[0][0]
-    print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]})")
+    if can_capture:
+        # 取れるカードがある場合：最高優先度のカードを選択
+        card_priorities.sort(key=lambda x: x[1], reverse=True)
+        best_card = card_priorities[0][0]
+        print("🤖 CPU カード選択分析（取得可能）:")
+        for card, priority in card_priorities:
+            matching = [fc.name for fc in field_cards if fc.month == card.month]
+            match_info = f" -> {matching}" if matching else " (マッチなし)"
+            print(f"  {card.name}: 優先度{priority}{match_info}")
+        print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]}) - 取得")
+    else:
+        # 取れるカードがない場合：一番安いカード（最低優先度）を捨てる
+        card_priorities.sort(key=lambda x: x[1])  # 昇順ソート（低い優先度が先）
+        best_card = card_priorities[0][0]
+        print("🤖 CPU カード選択分析（捨て札）:")
+        for card, priority in card_priorities:
+            card_type = get_card_type_by_name(card.name)
+            print(f"  {card.name}: 優先度{priority} ({card_type})")
+        print(f"🎯 CPU選択: {best_card.name} (優先度: {card_priorities[0][1]}) - 捨て札")
     
     return best_card
 
