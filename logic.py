@@ -137,8 +137,8 @@ def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, c
     else:
         print(f"🤖 CPU手札: None")
     
-    # 手札が0枚なら確定で上がり（ゲーム終了が近いため）
-    if cpu_hand is not None and len(cpu_hand) == 0:
+    # 手札が２枚未満なら確定で上がり（ゲーム終了が近いため）
+    if cpu_hand is not None and len(cpu_hand) < 3:
         print("🤖 手札0枚→確定上がり")
         return "agari"
     
@@ -202,11 +202,11 @@ def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, c
     # 特殊役による判断
     for yaku in current_yaku_list:
         if "雨四光" in yaku:
-            agari_score += 30  # 雨四光は価値高い
+            agari_score += 50  # 雨四光は価値高い
         elif "三光" in yaku:
-            koikoi_score += 15  # 四光を狙える
+            koikoi_score += 50  # 四光を狙える
         elif "猪鹿蝶" in yaku or "花見酒" in yaku or "月見酒" in yaku:
-            agari_score += 25  # 特殊役は確実に
+            agari_score += 50  # 特殊役は確実に
     
     # 最終判断
     print(f"🤖 判断スコア: 上がり={agari_score} vs こいこい={koikoi_score}")
@@ -670,11 +670,11 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
         active_merge_animations.append(merge_anim)
         
         # デバッグ出力
-        print(f"重なり合いアニメーション作成: {hand_card.name} + {field_card.name}")
-        print(f"アニメーション設定: 期間={merge_anim.duration}フレーム, フェーズ1={merge_anim.phase1_duration}, フェーズ2={merge_anim.phase2_duration}, フェーズ3={merge_anim.phase3_duration}")
-        print(f"初期位置 -> 手札({merge_anim.hand_start_x}, {merge_anim.hand_start_y}), 場札({merge_anim.field_start_x}, {merge_anim.field_start_y})")
-        print(f"目標位置 -> ({end_x}, {end_y})")
-        print(f"アクティブなアニメーション数: {len(active_merge_animations)}")
+        # print(f"重なり合いアニメーション作成: {hand_card.name} + {field_card.name}")
+        # print(f"アニメーション設定: 期間={merge_anim.duration}フレーム, フェーズ1={merge_anim.phase1_duration}, フェーズ2={merge_anim.phase2_duration}, フェーズ3={merge_anim.phase3_duration}")
+        # print(f"初期位置 -> 手札({merge_anim.hand_start_x}, {merge_anim.hand_start_y}), 場札({merge_anim.field_start_x}, {merge_anim.field_start_y})")
+        # print(f"目標位置 -> ({end_x}, {end_y})")
+        # print(f"アクティブなアニメーション数: {len(active_merge_animations)}")
         
         # 取得した2枚のカードを取り札エリアでハイライト
         captured_cards_to_highlight = [hand_card, field_card]  # 取得した2枚のカードをハイライト対象に
@@ -822,28 +822,33 @@ def update_animations():
         if merge_anim.frame_count % 30 == 0:  # 0.5秒おきに出力
             current_phase = 1 if merge_anim.frame_count <= merge_anim.phase1_duration else \
                            2 if merge_anim.frame_count <= merge_anim.phase1_duration + merge_anim.phase2_duration else 3
-            print(f"アニメーション{i}: フレーム{merge_anim.frame_count}/{merge_anim.duration}, フェーズ{current_phase}")
-            print(f"    手札位置: ({merge_anim.hand_card.x:.1f}, {merge_anim.hand_card.y:.1f})")
-            print(f"    場札位置: ({merge_anim.field_card.x:.1f}, {merge_anim.field_card.y:.1f})")
-            print(f"    目標位置: ({merge_anim.end_x}, {merge_anim.end_y}), 重なり位置: ({merge_anim.merge_x}, {merge_anim.merge_y})")
+            # print(f"アニメーション{i}: フレーム{merge_anim.frame_count}/{merge_anim.duration}, フェーズ{current_phase}")
+            # print(f"    手札位置: ({merge_anim.hand_card.x:.1f}, {merge_anim.hand_card.y:.1f})")
+            # print(f"    場札位置: ({merge_anim.field_card.x:.1f}, {merge_anim.field_card.y:.1f})")
+            # print(f"    目標位置: ({merge_anim.end_x}, {merge_anim.end_y}), 重なり位置: ({merge_anim.merge_x}, {merge_anim.merge_y})")
             if current_phase == 1:
-                print(f"    フェーズ1: 手札が場札の位置({merge_anim.merge_x}, {merge_anim.merge_y})まで移動中")
+                # print(f"    フェーズ1: 手札が場札の位置({merge_anim.merge_x}, {merge_anim.merge_y})まで移動中")
+                pass
             elif current_phase == 2:
-                print(f"    フェーズ2: 重なった状態で一時停止中")
+                # print(f"    フェーズ2: 重なった状態で一時停止中")
+                pass    
             elif current_phase == 3:
-                print(f"    フェーズ3: 重なって取り札エリアに移動中")
+                # print(f"    フェーズ3: 重なって取り札エリアに移動中")
+                pass
         
         if merge_anim.update():
             updated_merge_animations.append(merge_anim)
         else:
-            print(f"重なり合いアニメーション完了: {merge_anim.hand_card.name} + {merge_anim.field_card.name}")
+            # print(f"重なり合いアニメーション完了: {merge_anim.hand_card.name} + {merge_anim.field_card.name}")
+            pass
     
     active_merge_animations = updated_merge_animations
     after_count = len(active_merge_animations)  # デバッグ用
     
     # デバッグ出力（アニメーション数に変化があった場合のみ）
     if before_count != after_count:
-        print(f"重なり合いアニメーション更新: {before_count} → {after_count}")
+        # print(f"重なり合いアニメーション更新: {before_count} → {after_count}")
+        pass
     
     # 新規追加: 取り札ハイライトの更新（遅延対応）
     updated_captured_highlights = []  # 更新後のハイライトリスト
@@ -878,18 +883,18 @@ def is_animations_active():
     
     # デバッグ: アニメーション状況をログ出力（アクティブな場合のみ）
     if is_active:
-        print(f"🎬 アニメーション実行中:")
-        print(f"   通常: {animations_count}, オーバーレイ: {overlays_count}")
-        print(f"   山札ハイライト: {yama_highlights_count}, 取札ハイライト: {captured_highlights_count}")
+        # print(f"🎬 アニメーション実行中:")
+        # print(f"   通常: {animations_count}, オーバーレイ: {overlays_count}")
+        # print(f"   山札ハイライト: {yama_highlights_count}, 取札ハイライト: {captured_highlights_count}")
         
         # 取札ハイライトの詳細情報
         if captured_highlights_count > 0:
             for i, highlight in enumerate(active_captured_highlights):
                 status = "遅延中" if highlight.delay_count < highlight.delay_frames else "実行中"
                 frame_info = f"遅延{highlight.delay_count}/{highlight.delay_frames}, 残り{highlight.display_duration - highlight.frame_count}"
-                print(f"     ハイライト{i+1}: {status} ({frame_info})")
+                # print(f"     ハイライト{i+1}: {status} ({frame_info})")
         
-        print(f"   マージ: {merge_animations_count}, カットイン: {cutin_animations_count}")
+        # print(f"   マージ: {merge_animations_count}, カットイン: {cutin_animations_count}")
     
     return is_active
 
