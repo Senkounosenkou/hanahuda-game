@@ -347,9 +347,23 @@ class YakuCutInAnimation:
             # 役名から点数部分を除去（例："三光 (5文)" → "三光"）
             clean_yaku_name = self.yaku_name.split(' ')[0]  # スペースの前の部分を取得
             
+            # 特定の役名を画像ファイル名にマッピング
+            name_mapping = {
+                "種": "タネ",
+                "短": "タン", 
+                "カス": "カス"  # こちらは既に一致しているが明示的に記載
+            }
+            
+            # マッピングがある場合は変換
+            if clean_yaku_name in name_mapping:
+                file_yaku_name = name_mapping[clean_yaku_name]
+                print(f"   役名マッピング: {clean_yaku_name} → {file_yaku_name}")
+            else:
+                file_yaku_name = clean_yaku_name
+            
             # 役名に応じた画像ファイルを探索（cutinフォルダ内）
             base_dir = os.path.dirname(__file__)
-            image_path = os.path.join(base_dir, "assets", "img", "cutin", f"{clean_yaku_name}_cutin.png")
+            image_path = os.path.join(base_dir, "assets", "img", "cutin", f"{file_yaku_name}_cutin.png")
             
             print(f"   カットイン画像パス: {image_path}")
             print(f"   元の役名: {self.yaku_name} → クリーン役名: {clean_yaku_name}")

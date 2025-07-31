@@ -20,6 +20,7 @@ from logic import (  # ロジックモジュールから各関数をインポー
     draw_normal_animations,  # 新規追加: 通常のアニメーション描画関数
     draw_cutin_animations,  # 新規追加: カットインアニメーション描画関数
     calculate_score,  # 新規追加: 役計算関数
+    set_sound_effects,  # 新規追加: 効果音設定関数
     active_yama_highlights,  # アクティブな山札強調表示リスト
     active_merge_animations,  # 新規追加: アクティブな重なり合いアニメーションリスト
     active_animations  # 新規追加: アクティブな通常のアニメーションリスト
@@ -201,6 +202,112 @@ def draw_koikoi_choice_screen(screen, game_state, japanese_font, small_font):
         'koikoi_button': (koikoi_x, button_y, button_width, button_height)
     }
 
+def draw_victory_screen(screen, winner, player_score, cpu_score, yakus, japanese_font, small_font):
+    """勝利画面を描画する関数（モーダルダイアログ形式）
+    Args:
+        screen: 描画対象のスクリーン
+        winner: 勝者（'player' または 'cpu' または 'draw'）
+        player_score: プレイヤーの得点
+        cpu_score: CPUの得点
+        yakus: 成立した役のリスト
+        japanese_font: 日本語フォント
+        small_font: 小さいフォント
+    Returns:
+        dict: クリック可能なボタンの情報
+    """
+    # 半透明の背景オーバーレイ
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(180)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # 勝利画面の背景
+    victory_width = 700
+    victory_height = 500
+    victory_x = (SCREEN_WIDTH - victory_width) // 2
+    victory_y = (SCREEN_HEIGHT - victory_height) // 2
+    
+    # 勝者によって背景色を変更
+    if winner == 'player':
+        bg_color = (50, 100, 50)  # 緑系
+        title_color = (100, 255, 100)
+        title_text = "プレイヤーの勝利！"
+    elif winner == 'cpu':
+        bg_color = (100, 50, 50)  # 赤系
+        title_color = (255, 100, 100)
+        title_text = "CPUの勝利！"
+    else:
+        bg_color = (80, 80, 50)  # 黄系
+        title_color = (255, 255, 100)
+        title_text = "引き分け！"
+    
+    pygame.draw.rect(screen, bg_color, (victory_x, victory_y, victory_width, victory_height))
+    pygame.draw.rect(screen, (255, 255, 255), (victory_x, victory_y, victory_width, victory_height), 3)
+    
+    # タイトル表示
+    title_render = japanese_font.render(title_text, True, title_color)
+    title_rect = title_render.get_rect(center=(SCREEN_WIDTH//2, victory_y + 60))
+    screen.blit(title_render, title_rect)
+    
+    # 得点表示
+    score_y = victory_y + 120
+    player_score_text = small_font.render(f"プレイヤー: {player_score}文", True, (200, 255, 200))
+    cpu_score_text = small_font.render(f"CPU: {cpu_score}文", True, (255, 200, 200))
+    
+    player_score_rect = player_score_text.get_rect(center=(SCREEN_WIDTH//2 - 100, score_y))
+    cpu_score_rect = cpu_score_text.get_rect(center=(SCREEN_WIDTH//2 + 100, score_y))
+    
+    screen.blit(player_score_text, player_score_rect)
+    screen.blit(cpu_score_text, cpu_score_rect)
+    
+    # 成立した役を表示
+    yaku_y = victory_y + 170
+    if yakus:
+        yaku_title = small_font.render("成立した役:", True, (255, 255, 255))
+        yaku_title_rect = yaku_title.get_rect(center=(SCREEN_WIDTH//2, yaku_y))
+        screen.blit(yaku_title, yaku_title_rect)
+        
+        for i, yaku in enumerate(yakus[:4]):  # 最大4つまで表示
+            yaku_text = small_font.render(f"• {yaku}", True, (200, 255, 200))
+            yaku_rect = yaku_text.get_rect(center=(SCREEN_WIDTH//2, yaku_y + 40 + i * 25))
+            screen.blit(yaku_text, yaku_rect)
+    
+    # 2つのボタン：もう一度遊ぶ と 終了
+    button_width = 150
+    button_height = 50
+    button_spacing = 30
+    total_width = button_width * 2 + button_spacing
+    start_x = SCREEN_WIDTH//2 - total_width//2
+    button_y = victory_y + victory_height - 100
+    
+    # もう一度遊ぶボタン
+    play_again_x = start_x
+    pygame.draw.rect(screen, (50, 150, 50), (play_again_x, button_y, button_width, button_height))
+    pygame.draw.rect(screen, (255, 255, 255), (play_again_x, button_y, button_width, button_height), 2)
+    
+    play_again_text = small_font.render("もう一度遊ぶ", True, (255, 255, 255))
+    play_again_rect = play_again_text.get_rect(center=(play_again_x + button_width//2, button_y + button_height//2))
+    screen.blit(play_again_text, play_again_rect)
+    
+    # 終了ボタン
+    quit_x = start_x + button_width + button_spacing
+    pygame.draw.rect(screen, (150, 50, 50), (quit_x, button_y, button_width, button_height))
+    pygame.draw.rect(screen, (255, 255, 255), (quit_x, button_y, button_width, button_height), 2)
+    
+    quit_text = small_font.render("終了", True, (255, 255, 255))
+    quit_rect = quit_text.get_rect(center=(quit_x + button_width//2, button_y + button_height//2))
+    screen.blit(quit_text, quit_rect)
+    
+    # 操作説明
+    instruction_text = small_font.render("選択してください", True, (255, 255, 255))
+    instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH//2, victory_y + victory_height - 40))
+    screen.blit(instruction_text, instruction_rect)
+    
+    return {
+        'play_again_button': (play_again_x, button_y, button_width, button_height),
+        'quit_button': (quit_x, button_y, button_width, button_height)
+    }
+
 def draw_cpu_choice_message(screen, choice_type, japanese_font, small_font):
     """CPUの選択メッセージを表示する関数
     Args:
@@ -250,6 +357,282 @@ def draw_cpu_choice_message(screen, choice_type, japanese_font, small_font):
     sub_message = small_font.render(sub_text, True, (255, 255, 255))
     sub_rect = sub_message.get_rect(center=(SCREEN_WIDTH//2, box_y + 130))
     screen.blit(sub_message, sub_rect)
+
+def draw_round_result_screen(screen, game_state, japanese_font, small_font):
+    """ラウンド結果画面を描画する関数"""
+    # 半透明の背景オーバーレイ
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(200)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # 結果画面の背景
+    result_width = 700
+    result_height = 500
+    result_x = (SCREEN_WIDTH - result_width) // 2
+    result_y = (SCREEN_HEIGHT - result_height) // 2
+    
+    pygame.draw.rect(screen, (50, 50, 100), (result_x, result_y, result_width, result_height))
+    pygame.draw.rect(screen, (255, 255, 255), (result_x, result_y, result_width, result_height), 3)
+    
+    # ラウンド情報
+    round_text = japanese_font.render(f"第{game_state['current_round']}回戦 結果", True, (255, 255, 255))
+    round_rect = round_text.get_rect(center=(SCREEN_WIDTH//2, result_y + 50))
+    screen.blit(round_text, round_rect)
+    
+    # このラウンドの結果
+    current_result = game_state['round_results'][-1] if game_state['round_results'] else {}
+    player_round_score = current_result.get('player_score', 0)
+    cpu_round_score = current_result.get('cpu_score', 0)
+    round_winner = current_result.get('winner', '引き分け')
+    
+    # このラウンドの得点表示
+    player_score_text = small_font.render(f"プレイヤー: {player_round_score}文", True, (200, 255, 200))
+    player_score_rect = player_score_text.get_rect(center=(SCREEN_WIDTH//2 - 100, result_y + 150))
+    screen.blit(player_score_text, player_score_rect)
+    
+    cpu_score_text = small_font.render(f"CPU: {cpu_round_score}文", True, (255, 200, 200))
+    cpu_score_rect = cpu_score_text.get_rect(center=(SCREEN_WIDTH//2 + 100, result_y + 150))
+    screen.blit(cpu_score_text, cpu_score_rect)
+    
+    # ラウンド勝者表示
+    winner_text = japanese_font.render(f"勝者: {round_winner}", True, (255, 255, 0))
+    winner_rect = winner_text.get_rect(center=(SCREEN_WIDTH//2, result_y + 200))
+    screen.blit(winner_text, winner_rect)
+    
+    # 総合得点表示
+    total_text = small_font.render("総合得点", True, (255, 255, 255))
+    total_rect = total_text.get_rect(center=(SCREEN_WIDTH//2, result_y + 270))
+    screen.blit(total_text, total_rect)
+    
+    player_total_text = small_font.render(f"プレイヤー: {game_state['player_total_score']}文", True, (200, 255, 200))
+    player_total_rect = player_total_text.get_rect(center=(SCREEN_WIDTH//2 - 100, result_y + 310))
+    screen.blit(player_total_text, player_total_rect)
+    
+    cpu_total_text = small_font.render(f"CPU: {game_state['cpu_total_score']}文", True, (255, 200, 200))
+    cpu_total_rect = cpu_total_text.get_rect(center=(SCREEN_WIDTH//2 + 100, result_y + 310))
+    screen.blit(cpu_total_text, cpu_total_rect)
+    
+    # 次のラウンドまたは最終結果のメッセージ
+    if game_state['current_round'] < game_state['total_rounds']:
+        next_text = small_font.render(f"次は第{game_state['current_round'] + 1}回戦です", True, (255, 255, 255))
+    else:
+        # 最終結果
+        if game_state['player_total_score'] > game_state['cpu_total_score']:
+            final_winner = "プレイヤーの総合勝利！"
+            final_color = (0, 255, 0)
+        elif game_state['cpu_total_score'] > game_state['player_total_score']:
+            final_winner = "CPUの総合勝利！"
+            final_color = (255, 0, 0)
+        else:
+            final_winner = "総合引き分け！"
+            final_color = (255, 255, 0)
+        
+        next_text = japanese_font.render(final_winner, True, final_color)
+    
+    next_rect = next_text.get_rect(center=(SCREEN_WIDTH//2, result_y + 380))
+    screen.blit(next_text, next_rect)
+    
+    # 操作説明
+    instruction_text = small_font.render("クリックして続行", True, (200, 200, 200))
+    instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH//2, result_y + 450))
+    screen.blit(instruction_text, instruction_rect)
+
+def calculate_final_scores(game_state, winner, loser, winner_score, winner_yakus, loser_score, loser_yakus):
+    """
+    新しい得点計算ロジック（こいこい後の特殊ルール対応）
+    
+    Args:
+        game_state: ゲーム状態
+        winner: 勝者（'player' or 'cpu'）
+        loser: 敗者（'player' or 'cpu'）
+        winner_score: 勝者の得点
+        winner_yakus: 勝者の役リスト
+        loser_score: 敗者の得点
+        loser_yakus: 敗者の役リスト
+    
+    Returns:
+        tuple: (勝者最終得点, 敗者最終得点)
+    """
+    print(f"� 得点計算: {winner}勝利 {winner_score}文 vs {loser} {loser_score}文")
+    
+    final_winner_score = winner_score
+    final_loser_score = loser_score
+    
+    # こいこい後の特殊ルール処理
+    if game_state['koikoi_was_declared']:
+        koikoi_declarer = game_state['koikoi_declarer']
+        
+        # こいこい宣言者が負けた場合、相手の得点を2倍にする
+        if koikoi_declarer != winner:
+            print(f"🚨 こいこい倍返し: {winner_score}文 → {winner_score * 2}文")
+            final_winner_score = winner_score * 2
+        
+        # どちらも役を作らなかった場合の処理（両者0点）
+        if winner_score == 0 and loser_score == 0:
+            print(f"🤝 こいこい後両者無得点 - 得点なし")
+            final_winner_score = 0
+            final_loser_score = 0
+    
+    print(f"� 最終得点: 勝者{final_winner_score}文, 敗者{final_loser_score}文")
+    
+    return final_winner_score, final_loser_score
+
+def reset_for_next_round(game_state):
+    """次のラウンドのためにゲーム状態をリセット"""
+    global player_hand, cpu_hand, field_cards, yama_deck, player_captured, cpu_captured
+    
+    # 新しいゲームのためにデッキをリセット
+    deck = Deck(cards)
+    deck.shuffle()
+    
+    # カード配置をリセット
+    player_hand = deck.deal(7)
+    cpu_hand = deck.deal(7)
+    field_cards = deck.deal(6)
+    yama_deck = deck.cards[:]
+    
+    # 取り札をリセット
+    player_captured = []
+    cpu_captured = []
+    
+    # カードの座標設定
+    for i, card in enumerate(player_hand):
+        card.x = 50 + i * (card.get_image().get_width() + 10)
+        card.y = screen_height - 200
+        card.is_face_up = True
+
+    for i, card in enumerate(cpu_hand):
+        card.x = 50 + i * (card.get_image().get_width() + 10)
+        card.y = 100
+        card.is_face_up = False
+
+    for i, card in enumerate(field_cards):
+        card.x = 80 + i * 70
+        card.y = 100 + VERTICAL_SPACING
+        card.is_face_up = True
+
+    # 山札の位置を設定
+    yama_x = screen_width - 400
+    yama_y = 100 + VERTICAL_SPACING
+    for card in yama_deck:
+        card.x = yama_x
+        card.y = yama_y
+        card.is_face_up = False
+    
+    # ゲーム状態をリセット
+    # 先行プレイヤーの決定（花札の正式ルール）
+    if game_state['current_round'] == 1:
+        # 1回戦はランダム
+        game_state['turn'] = random.choice(['player', 'cpu'])
+        print(f"🎲 1回戦 - ランダム先行: {'プレイヤー' if game_state['turn'] == 'player' else 'CPU'}")
+    else:
+        # 2回戦以降は前回戦の勝者が先行
+        if game_state['round_results']:
+            last_result = game_state['round_results'][-1]
+            if last_result['winner'] == 'プレイヤー':
+                game_state['turn'] = 'player'
+                print(f"🏆 第{game_state['current_round']}回戦 - 前回勝者（プレイヤー）が先行")
+            elif last_result['winner'] == 'CPU':
+                game_state['turn'] = 'cpu'
+                print(f"🏆 第{game_state['current_round']}回戦 - 前回勝者（CPU）が先行")
+            else:
+                # 引き分けの場合は前回と同じ先行者
+                # または前々回の勝者を維持（実装により異なる）
+                game_state['turn'] = random.choice(['player', 'cpu'])
+                print(f"🤝 第{game_state['current_round']}回戦 - 前回引き分けのためランダム先行: {'プレイヤー' if game_state['turn'] == 'player' else 'CPU'}")
+        else:
+            # 念のための安全処理
+            game_state['turn'] = random.choice(['player', 'cpu'])
+            print(f"⚠️ 第{game_state['current_round']}回戦 - 結果記録がないためランダム先行")
+    game_state['selected_card'] = None
+    game_state['cpu_timer'] = 0
+    game_state['cpu_action_phase'] = 'waiting'
+    game_state['game_over'] = False
+    game_state['koikoi_choice'] = False
+    game_state['pending_koikoi_choice'] = False
+    game_state['koikoi_player'] = None
+    game_state['koikoi_was_declared'] = False  # こいこい宣言フラグもリセット
+    game_state['koikoi_declarer'] = None  # 宣言者もリセット
+    game_state['cpu_agari'] = False  # CPU上がりフラグもリセット
+    game_state['current_round_score'] = 0
+    game_state['current_yakus'] = []
+    game_state['cpu_choice_display'] = False
+    game_state['cpu_choice_type'] = None
+    game_state['cpu_choice_timer'] = 0
+    game_state['show_round_result'] = False
+    game_state['round_result_timer'] = 0
+    
+    # 遅延処理フラグをリセット
+    game_state['player_yama_delay'] = 0
+    game_state['cpu_yama_delay'] = 0
+    game_state['player_yama_pending'] = False
+    if 'player_yama_delay' in game_state:
+        del game_state['player_yama_delay']
+    if 'cpu_yama_delay' in game_state:
+        del game_state['cpu_yama_delay']
+    
+    # CPUの勝利関連フラグをクリア
+    if 'winner' in game_state:
+        del game_state['winner']
+    if 'final_score_cpu' in game_state:
+        del game_state['final_score_cpu']
+    if 'final_yakus_cpu' in game_state:
+        del game_state['final_yakus_cpu']
+    if 'result_text' in game_state:
+        del game_state['result_text']
+    
+    # 勝利画面関連フラグをクリア
+    game_state['show_victory_screen'] = False
+    game_state['victory_winner'] = None
+    game_state['victory_player_score'] = 0
+    game_state['victory_cpu_score'] = 0
+    game_state['victory_yakus'] = []
+    
+    # 役状態をリセット
+    from logic import previous_player_yakus, previous_cpu_yakus
+    previous_player_yakus.clear()
+    previous_cpu_yakus.clear()
+    
+    # アニメーション状態をリセット
+    try:
+        from logic import active_animations
+        active_animations.clear()
+    except ImportError:
+        pass
+    
+    try:
+        from logic import active_merge_animations
+        active_merge_animations.clear()
+    except ImportError:
+        pass
+    
+    try:
+        from logic import active_captured_highlights
+        active_captured_highlights.clear()
+    except ImportError:
+        pass
+    
+    try:
+        from logic import active_yama_highlights
+        active_yama_highlights.clear()
+    except ImportError:
+        pass
+    
+    try:
+        from logic import cutin_queue
+        cutin_queue.clear()
+    except ImportError:
+        pass
+    
+    # カットインアニメーションもリセット（存在する場合）
+    try:
+        from logic import active_cutin_animations
+        active_cutin_animations.clear()
+    except ImportError:
+        pass
+    
+    print(f"🎮 第{game_state['current_round']}回戦開始！")
 
 def setup_test_scenario(test_type, deck):
     """テスト用のカード配置を設定する関数
@@ -369,6 +752,33 @@ def setup_test_scenario(test_type, deck):
         remaining_player = []
         remaining_field = ['plum_tan', 'wisteria_tan', 'peony_tan']
         remaining_cpu = ['paulownia_1', 'bush_clover_1', 'maple_1', 'chrysanthemum_1']
+        
+    elif test_type == "種" or test_type == "tane":
+        print("📝 種テスト配置を設定")
+        # 種5枚: 猪、鹿、蝶、杯、鳥を プレイヤーに配布
+        player_cards = ['boar', 'maple_deer', 'peony_butterfly', 'chrysanthemum_sake_cup', 'plum_bird']
+        field_card_names = ['bush_clover_tan', 'maple_tan', 'peony_tan', 'chrysanthemum_tan', 'plum_tan']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'cherry_curtain']
+        remaining_field = ['pine_tan']
+        
+    elif test_type == "短" or test_type == "tan":
+        print("📝 短テスト配置を設定")
+        # 短5枚: 松、梅、桜、藤、菖蒲の短冊を プレイヤーに配布
+        player_cards = ['pine_tan', 'plum_tan', 'cherry_tan', 'wisteria_tan', 'iris_tan']
+        field_card_names = ['pine_1', 'plum_1', 'cherry_1', 'wisteria_1', 'iris_1']
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'plum_bird']
+        remaining_field = ['peony_tan']
+        
+    elif test_type == "カス" or test_type == "kasu":
+        print("📝 カステスト配置を設定")
+        # カス10枚: 各月のカス札を プレイヤーに配布
+        player_cards = ['pine_1', 'pine_2', 'plum_1', 'plum_2', 'cherry_1', 'cherry_2', 'wisteria_1']
+        field_card_names = ['wisteria_2', 'iris_1', 'iris_2']  # 残り3枚を場に配布してプレイヤーが取得
+        # 残りは通常配置
+        remaining_player = []
+        remaining_field = ['pine_tan', 'plum_tan', 'cherry_tan']
         
     else:
         print("❌ 不明なテストタイプ、通常配置にします")
@@ -549,17 +959,15 @@ for card in yama_deck:
     card.y = yama_y
     card.is_face_up = False  # 山札は裏向き
 
-# 情報表示の固定座標を計算（初期配置）
-# カード画像の幅を取得（最初のカードから）
+# 情報表示の動的座標計算用のカード幅を取得（最初のカードから）
 card_width = cards[0].get_image().get_width()
-# 手札7枚分の右端座標を計算
-info_display_x = 50 + 6 * (card_width + 10) + card_width + 20
 
-# first_player = random.choice(['player', 'cpu'])  # 最初のプレイヤーをランダムに決定
-# print(f"🎲 最初のプレイヤー: {first_player}")
+first_player = random.choice(['player', 'cpu'])  # 最初のプレイヤーをランダムに決定
+print(f"🎲 最初のプレイヤー: {first_player}")
 
 game_state = {
-    'turn': 'player',   #'turn': first_player,
+    # 'turn': 'player',
+    'turn': first_player,   
     'selected_card': None,
     'cpu_timer': 0,
     'cpu_action_phase': 'waiting',
@@ -567,11 +975,29 @@ game_state = {
     'koikoi_choice': False,  # こいこい選択画面フラグ
     'pending_koikoi_choice': False,  # カットイン完了後にこいこい選択を表示するフラグ
     'koikoi_player': None,  # こいこいを選択したプレイヤー（'player' or 'cpu'）
+    'koikoi_was_declared': False,  # このラウンドでこいこいが宣言されたかのフラグ
+    'koikoi_declarer': None,  # こいこいを宣言したプレイヤー（'player' or 'cpu'）
+    'cpu_agari': False,  # CPUが上がりを選択したフラグ
     'current_round_score': 0,  # 現在のラウンドの得点
     'current_yakus': [],  # 現在成立している役
     'cpu_choice_display': False,  # CPUの選択メッセージ表示フラグ
     'cpu_choice_type': None,  # CPUの選択タイプ（'koikoi' または 'agari'）
     'cpu_choice_timer': 0,  # CPUメッセージ表示時間
+    # 3回戦制システム用の変数を追加
+    'current_round': 1,  # 現在のラウンド（1〜3）
+    'total_rounds': 3,  # 総ラウンド数
+    'player_total_score': 0,  # プレイヤーの総得点
+    'cpu_total_score': 0,  # CPUの総得点
+    'round_results': [],  # 各ラウンドの結果を保存
+    'match_over': False,  # 全試合終了フラグ
+    'show_round_result': False,  # ラウンド結果表示フラグ
+    'round_result_timer': 0,  # ラウンド結果表示時間
+    # 勝利画面用の変数を追加
+    'show_victory_screen': False,  # 勝利画面表示フラグ
+    'victory_winner': None,  # 勝者（'player', 'cpu', 'draw'）
+    'victory_player_score': 0,  # 勝利画面用プレイヤー得点
+    'victory_cpu_score': 0,  # 勝利画面用CPU得点
+    'victory_yakus': [],  # 勝利画面用成立役
 }
 
 # テストモード情報を表示
@@ -590,6 +1016,38 @@ pygame.mixer.init()  # Pygameのミキサーを初期化
 pygame.mixer.music.load("assets/sound/茶屋にて.mp3")  # BGMの読み込み
 pygame.mixer.music.set_volume(0.1)  # BGMの音量を設定
 pygame.mixer.music.play(-1)  # BGMをループ再生
+
+# 効果音再生関数
+def play_sound_effect(sound):
+    """効果音を再生する関数"""
+    if sound:
+        try:
+            sound.play()
+        except pygame.error:
+            pass  # 音が再生できない場合は無視
+
+# 効果音の読み込み
+card_capture_sound = None
+yaku_complete_sound = None
+
+try:
+    # カード取得時の効果音
+    card_capture_sound = pygame.mixer.Sound("assets/sound/card_capture.mp3")
+    card_capture_sound.set_volume(5.0)
+    print("✅ カード取得効果音を読み込みました")
+except:
+    print("⚠️ カード取得効果音ファイルが見つかりません - 効果音なしで実行")
+
+try:
+    # 役成立時の効果音
+    yaku_complete_sound = pygame.mixer.Sound("assets/sound/yaku_complete.mp3")
+    yaku_complete_sound.set_volume(0.3)
+    print("✅ 役成立効果音を読み込みました")
+except:
+    print("⚠️ 役成立効果音ファイルが見つかりません - 効果音なしで実行")
+
+# logic.pyに効果音を設定
+set_sound_effects(card_capture_sound, yaku_complete_sound)
 
 # メインループ
 run = True
@@ -665,11 +1123,19 @@ while run:
         empty_text = japanese_font.render("山札: なし", True, (255, 100, 100))
         screen.blit(empty_text, (yama_x - 80, yama_y + 100))
 
-    # ゲーム情報の表示（日本語）- 中央上部に移動
-    # turn_text = "プレイヤーのターン" if game_state['turn'] == 'player' else "CPUのターン"
-    # turn_surface = small_font.render(turn_text, True, (255, 255, 255))
-    # turn_rect = turn_surface.get_rect(center=(screen_width//2, 30))
-    # screen.blit(turn_surface, turn_rect)
+    # ゲーム情報の表示（日本語）- 右上角に移動
+    # ラウンド情報を表示
+    round_info_text = f"第{game_state['current_round']}回戦 / {game_state['total_rounds']}回戦"
+    round_surface = small_font.render(round_info_text, True, (255, 255, 255))
+    screen.blit(round_surface, (screen_width - round_surface.get_width() - 10, 10))
+    
+    # 総合得点を表示
+    total_score_text = f"総合得点 - プレイヤー: {game_state['player_total_score']}文, CPU: {game_state['cpu_total_score']}文"
+    total_surface = small_font.render(total_score_text, True, (255, 255, 0))
+    screen.blit(total_surface, (screen_width - total_surface.get_width() - 10, 35))
+
+    # 情報表示の固定座標（取り札との重なりを避けた位置）
+    info_display_x = 600  # 固定位置（十分右側に配置）
 
     # CPU手札枚数表示（固定位置）
     cpu_hand_text = small_font.render(f"CPU手札: {len(cpu_hand)}枚", True, (255, 255, 255))
@@ -721,6 +1187,18 @@ while run:
     draw_captured_highlights(screen)  # 取り札ハイライト表示を描画
     draw_cutin_animations(screen)  # カットインアニメーション描画
 
+    # ラウンド結果画面の描画
+    if game_state['show_round_result']:
+        draw_round_result_screen(screen, game_state, japanese_font, small_font)
+        game_state['round_result_timer'] += 1
+
+    # 勝利画面の描画
+    victory_buttons = None
+    if game_state['show_victory_screen']:
+        victory_buttons = draw_victory_screen(screen, game_state['victory_winner'], 
+                                           game_state['victory_player_score'], game_state['victory_cpu_score'], 
+                                           game_state['victory_yakus'], japanese_font, small_font)
+
     # こいこい選択画面の描画
     koikoi_buttons = None
     if game_state['koikoi_choice']:
@@ -734,22 +1212,55 @@ while run:
             game_state['cpu_choice_display'] = False
             game_state['cpu_choice_type'] = None
 
+    # CPUターンの条件詳細チェック（デバッグ用）
+    if game_state['turn'] == 'cpu':
+        cpu_conditions = []
+        if is_animations_active():
+            cpu_conditions.append("アニメーション実行中")
+        if game_state['koikoi_choice']:
+            cpu_conditions.append("こいこい選択中")
+        if game_state['game_over']:
+            cpu_conditions.append("ゲーム終了")
+        if game_state['cpu_choice_display']:
+            cpu_conditions.append("CPU選択表示中")
+        
+        if cpu_conditions:
+            print(f"⚠️ CPUターン処理ブロック中: {', '.join(cpu_conditions)}")
+        else:
+            print(f"✅ CPUターン処理条件クリア: フェーズ={game_state['cpu_action_phase']}")
+
     # CPUターンの処理（こいこい選択中・ゲーム終了後・CPUメッセージ表示中は停止）
-    if (game_state['turn'] == 'cpu' and len(cpu_hand) > 0 and 
+    if (game_state['turn'] == 'cpu' and 
         not is_animations_active() and not game_state['koikoi_choice'] and
         not game_state['game_over'] and not game_state['cpu_choice_display']):  # ゲーム終了後は停止
+        
+        # CPUのフェーズに基づいて処理を継続（手札チェックは後で行う）
         game_state['cpu_timer'] += 1
+        
+        # デバッグ: CPUの状態を詳細出力
+        if game_state['cpu_timer'] % 60 == 0:  # 1秒ごとに出力
+            print(f"🤖 CPU状態: フェーズ={game_state['cpu_action_phase']}, タイマー={game_state['cpu_timer']}, 手札={len(cpu_hand)}枚, アニメーション={is_animations_active()}")
+            print(f"   詳細: koikoi_choice={game_state['koikoi_choice']}, game_over={game_state['game_over']}, cpu_choice_display={game_state['cpu_choice_display']}")
+            print(f"   山札={len(yama_deck)}枚, プレイヤー手札={len(player_hand)}枚")
+        
         if game_state['cpu_timer'] > 90:
             import random
             
             if game_state['cpu_action_phase'] == 'waiting':
-                # 戦略的にカードを選択
-                cpu_card = choose_best_cpu_card(cpu_hand, cpu_captured, field_cards)
-                game_state['selected_cpu_card'] = cpu_card
-                
-                game_state['cpu_action_phase'] = 'card_selected'
-                game_state['cpu_timer'] = 0
-                print(f"CPU: {cpu_card.name} を選択しました")
+                # waiting フェーズでのみ手札をチェック
+                if len(cpu_hand) == 0:
+                    print("🎴 CPU手札が空 - プレイヤーターンに切り替え")
+                    game_state['turn'] = 'player'
+                    game_state['cpu_timer'] = 0
+                    game_state['cpu_action_phase'] = 'waiting'
+                else:
+                    # 戦略的にカードを選択
+                    cpu_card = choose_best_cpu_card(cpu_hand, cpu_captured, field_cards)
+                    game_state['selected_cpu_card'] = cpu_card
+                    
+                    game_state['cpu_action_phase'] = 'card_selected'
+                    game_state['cpu_timer'] = 0
+                    print(f"CPU: {cpu_card.name} を選択しました")
                 
             elif game_state['cpu_action_phase'] == 'card_selected':
                 if game_state['cpu_timer'] > 30:
@@ -766,7 +1277,7 @@ while run:
                             field_cards.remove(matching_card)
                         
                         # 複数枚取得のアニメーション（新しい関数を使用）
-                        capture_multiple_cards_with_animation(cpu_card, matching_cards, cpu_captured, True, screen_height, screen_width, game_state)
+                        capture_multiple_cards_with_animation(cpu_card, matching_cards, cpu_captured, True, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards, len(yama_deck))
                         matched = True
                     
                     if not matched:
@@ -783,15 +1294,62 @@ while run:
                     game_state['cpu_timer'] = 0
                     
             elif game_state['cpu_action_phase'] == 'draw_yama':
+                # デバッグ: draw_yamaフェーズの詳細状態
+                if game_state['cpu_timer'] % 30 == 0:  # 0.5秒ごとに出力
+                    print(f"🎴 draw_yamaフェーズ: タイマー={game_state['cpu_timer']}, アニメーション={is_animations_active()}, 山札={len(yama_deck)}枚")
+                
                 # アニメーションが完了してから山札処理を実行（少し遅延を追加）
                 if not is_animations_active() and game_state['cpu_timer'] > 30:  # 0.5秒遅延
                     # 山札処理前に場札の位置を整形
                     update_field_positions(field_cards)
-                    draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, True, screen_width, screen_height, game_state)
+                    yama_drawn = draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, True, screen_width, screen_height, game_state, cpu_hand, field_cards, len(yama_deck))
                     
-                    game_state['cpu_action_phase'] = 'waiting'
-                    game_state['turn'] = 'player'
-                    game_state['cpu_timer'] = 0
+                    # 山札が空でもターンを正常に終了
+                    if not yama_drawn:
+                        print("🎴 山札が空です - CPUターン終了")
+                    
+                    # 手札と山札が両方とも空になったらゲーム終了
+                    if len(yama_deck) == 0 and len(cpu_hand) == 0 and len(player_hand) == 0:
+                        print("🏁 全カードを使い切りました - ラウンド終了")
+                        
+                        # 遅延処理フラグをすべてクリア
+                        game_state['player_yama_pending'] = False
+                        if 'player_yama_delay' in game_state:
+                            del game_state['player_yama_delay']
+                        if 'cpu_yama_delay' in game_state:
+                            del game_state['cpu_yama_delay']
+                        
+                        # 現在の得点を取得
+                        player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
+                        cpu_score, cpu_yakus = calculate_score(cpu_captured, screen_width, screen_height)
+                        
+                        # ラウンド結果を記録
+                        round_winner = "プレイヤー" if player_score > cpu_score else ("CPU" if cpu_score > player_score else "引き分け")
+                        
+                        round_result = {
+                            'round': game_state['current_round'],
+                            'player_score': player_score,
+                            'cpu_score': cpu_score,
+                            'player_yakus': player_yakus,
+                            'cpu_yakus': cpu_yakus,
+                            'winner': round_winner
+                        }
+                        game_state['round_results'].append(round_result)
+                        
+                        # 総得点に加算
+                        game_state['player_total_score'] += player_score
+                        game_state['cpu_total_score'] += cpu_score
+                        
+                        # ラウンド結果画面を表示
+                        game_state['show_round_result'] = True
+                        game_state['round_result_timer'] = 0
+                        game_state['game_over'] = True
+                    else:
+                        print(f"🔄 CPUターン正常終了 - プレイヤーターンに切り替え")
+                        print(f"   最終状態: CPU手札={len(cpu_hand)}枚, プレイヤー手札={len(player_hand)}枚, 山札={len(yama_deck)}枚")
+                        game_state['cpu_action_phase'] = 'waiting'
+                        game_state['turn'] = 'player'
+                        game_state['cpu_timer'] = 0
 
     # CPUの選択カードのハイライト表示（金色に変更）
     if game_state['turn'] == 'cpu' and game_state['cpu_action_phase'] == 'card_selected' and 'selected_cpu_card' in game_state:
@@ -808,27 +1366,162 @@ while run:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             
+            # 勝利画面のクリック処理
+            if game_state['show_victory_screen'] and victory_buttons:
+                # もう一度遊ぶボタン
+                if 'play_again_button' in victory_buttons:
+                    play_again_x, play_again_y, play_again_w, play_again_h = victory_buttons['play_again_button']
+                    if (play_again_x <= mx <= play_again_x + play_again_w and 
+                        play_again_y <= my <= play_again_y + play_again_h):
+                        print("🔄 もう一度遊ぶ")
+                        # ゲーム状態を完全リセット
+                        print("💫 新しいゲーム開始 - 完全初期化")
+                        
+                        # 基本ゲーム状態のリセット
+                        game_state['current_round'] = 1
+                        game_state['player_total_score'] = 0
+                        game_state['cpu_total_score'] = 0
+                        game_state['round_results'] = []
+                        game_state['match_over'] = False
+                        game_state['show_victory_screen'] = False
+                        game_state['victory_winner'] = None
+                        game_state['victory_player_score'] = 0
+                        game_state['victory_cpu_score'] = 0
+                        game_state['victory_yakus'] = []
+                        
+                        # すべてのゲーム状態フラグをリセット
+                        game_state['game_over'] = False
+                        game_state['koikoi_choice'] = False
+                        game_state['pending_koikoi_choice'] = False
+                        game_state['koikoi_player'] = None
+                        game_state['current_round_score'] = 0
+                        game_state['current_yakus'] = []
+                        game_state['cpu_choice_display'] = False
+                        game_state['cpu_choice_type'] = None
+                        game_state['cpu_choice_timer'] = 0
+                        game_state['show_round_result'] = False
+                        game_state['round_result_timer'] = 0
+                        game_state['selected_card'] = None
+                        game_state['cpu_timer'] = 0
+                        game_state['cpu_action_phase'] = 'waiting'
+                        game_state['player_yama_pending'] = False
+                        
+                        # 遅延処理や一時的なフラグをクリア
+                        for key in list(game_state.keys()):
+                            if key in ['player_yama_delay', 'cpu_yama_delay', 'winner', 
+                                     'final_score_cpu', 'final_yakus_cpu', 'result_text',
+                                     'pending_cpu_choice', 'cpu_choice', 'cpu_score', 'cpu_yakus']:
+                                del game_state[key]
+                        
+                        # カードとアニメーションの完全リセット（先行プレイヤーも自動決定）
+                        reset_for_next_round(game_state)
+                
+                # 終了ボタン
+                if 'quit_button' in victory_buttons:
+                    quit_x, quit_y, quit_w, quit_h = victory_buttons['quit_button']
+                    if (quit_x <= mx <= quit_x + quit_w and 
+                        quit_y <= my <= quit_y + quit_h):
+                        print("🎮 ゲーム終了")
+                        run = False
+                    
             # こいこい選択の処理
-            if game_state['koikoi_choice'] and koikoi_buttons:
+            elif game_state['koikoi_choice'] and koikoi_buttons:
                 agari_x, agari_y, agari_w, agari_h = koikoi_buttons['agari_button']
                 koikoi_x, koikoi_y, koikoi_w, koikoi_h = koikoi_buttons['koikoi_button']
                 
                 if (agari_x <= mx <= agari_x + agari_w and 
                     agari_y <= my <= agari_y + agari_h):
-                    # 上がりを選択
+                    # 上がりを選択 - ラウンド終了処理
                     print("🎯 プレイヤーが上がりを選択！")
                     game_state['koikoi_choice'] = False
+                    
+                    # 遅延処理フラグをすべてクリア
+                    game_state['player_yama_pending'] = False
+                    if 'player_yama_delay' in game_state:
+                        del game_state['player_yama_delay']
+                    if 'cpu_yama_delay' in game_state:
+                        del game_state['cpu_yama_delay']
+                    
+                    # 現在の得点を取得
+                    player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
+                    cpu_score, cpu_yakus = calculate_score(cpu_captured, screen_width, screen_height)
+                    
+                    # 新しい得点計算ロジックを適用
+                    if player_score > cpu_score:
+                        # プレイヤーの勝利
+                        final_player_score, final_cpu_score = calculate_final_scores(
+                            game_state, 'player', 'cpu', player_score, player_yakus, cpu_score, cpu_yakus
+                        )
+                        round_winner = "プレイヤー"
+                    elif cpu_score > player_score:
+                        # CPUの勝利
+                        final_player_score, final_cpu_score = calculate_final_scores(
+                            game_state, 'cpu', 'player', cpu_score, cpu_yakus, player_score, player_yakus
+                        )
+                        round_winner = "CPU"
+                    else:
+                        # 引き分け
+                        final_player_score, final_cpu_score = player_score, cpu_score
+                        round_winner = "引き分け"
+                    
+                    # ラウンド結果を記録
+                    round_result = {
+                        'round': game_state['current_round'],
+                        'player_score': final_player_score,
+                        'cpu_score': final_cpu_score,
+                        'player_yakus': player_yakus,
+                        'cpu_yakus': cpu_yakus,
+                        'winner': round_winner
+                    }
+                    game_state['round_results'].append(round_result)
+                    
+                    # 総得点に加算
+                    game_state['player_total_score'] += final_player_score
+                    game_state['cpu_total_score'] += final_cpu_score
+                    
+                    # ラウンド結果画面を表示
+                    game_state['show_round_result'] = True
+                    game_state['round_result_timer'] = 0
                     game_state['game_over'] = True
-                    # 結果を設定（とりあえず勝利として処理）
-                    result_text = japanese_font.render("プレイヤーの勝利！", True, (0, 255, 0))
-                    game_state['result_text'] = result_text
                     
                 elif (koikoi_x <= mx <= koikoi_x + koikoi_w and 
                       koikoi_y <= my <= koikoi_y + koikoi_h):
                     # こいこいを選択
                     print("🔥 プレイヤーがこいこいを選択！")
                     game_state['koikoi_choice'] = False
+                    game_state['koikoi_was_declared'] = True  # こいこい宣言フラグ
+                    game_state['koikoi_declarer'] = 'player'  # 宣言者を記録
                     # ゲーム続行
+                    
+            # ラウンド結果画面のクリック処理
+            elif game_state['show_round_result']:
+                # ラウンド結果画面をクリックして次へ進む
+                if game_state['current_round'] < game_state['total_rounds']:
+                    # 次のラウンドへ
+                    game_state['current_round'] += 1
+                    game_state['show_round_result'] = False  # ラウンド結果画面を閉じる
+                    reset_for_next_round(game_state)
+                else:
+                    # 全試合終了
+                    game_state['match_over'] = True
+                    game_state['show_round_result'] = False
+                    
+                    # 最終結果を設定
+                    if game_state['player_total_score'] > game_state['cpu_total_score']:
+                        game_state['victory_winner'] = 'player'
+                        print("\n🎊 プレイヤーの総合勝利！ 🎊")
+                    elif game_state['cpu_total_score'] > game_state['player_total_score']:
+                        game_state['victory_winner'] = 'cpu'
+                        print("\n💻 CPUの総合勝利！ 💻")
+                    else:
+                        game_state['victory_winner'] = 'draw'
+                        print("\n🤝 総合引き分け！ 🤝")
+                    
+                    # 勝利画面用の情報を保存
+                    game_state['victory_player_score'] = game_state['player_total_score']
+                    game_state['victory_cpu_score'] = game_state['cpu_total_score']
+                    game_state['victory_yakus'] = game_state.get('current_yakus', [])
+                    game_state['show_victory_screen'] = True
                     
             elif (game_state['turn'] == 'player' and not is_animations_active() and 
                   not game_state['koikoi_choice'] and not game_state['game_over']):
@@ -863,7 +1556,7 @@ while run:
                                     field_cards.remove(matching_card)
                                 
                                 # 複数枚取得のアニメーション（新しい関数を使用）
-                                capture_multiple_cards_with_animation(selected_card, matching_cards, player_captured, False, screen_height, screen_width, game_state)
+                                capture_multiple_cards_with_animation(selected_card, matching_cards, player_captured, False, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards, len(yama_deck))
                                 game_state['selected_card'] = None
                                 
                                 # プレイヤーの山札処理を遅延
@@ -897,6 +1590,38 @@ while run:
                             # プレイヤーの山札処理を遅延（場に出てから実行）
                             game_state['player_yama_pending'] = True
                             game_state['player_yama_delay'] = 60  # 1秒遅延を追加
+            else:
+                # プレイヤーの操作がブロックされている理由をデバッグ
+                if game_state['turn'] == 'player':
+                    blocked_reasons = []
+                    if is_animations_active():
+                        blocked_reasons.append("アニメーション実行中")
+                    if game_state['koikoi_choice']:
+                        blocked_reasons.append("こいこい選択中")
+                    if game_state['game_over']:
+                        blocked_reasons.append("ゲーム終了")
+                    if blocked_reasons:
+                        print(f"🚫 プレイヤー操作ブロック中: {', '.join(blocked_reasons)}")
+                elif game_state['turn'] == 'cpu':
+                    # CPUターンが続いている理由をデバッグ
+                    blocked_reasons = []
+                    if len(cpu_hand) == 0:
+                        blocked_reasons.append(f"CPU手札空（{len(cpu_hand)}枚）")
+                    if is_animations_active():
+                        blocked_reasons.append("アニメーション実行中")
+                    if game_state['koikoi_choice']:
+                        blocked_reasons.append("こいこい選択中")
+                    if game_state['game_over']:
+                        blocked_reasons.append("ゲーム終了")
+                    if game_state['cpu_choice_display']:
+                        blocked_reasons.append("CPU選択表示中")
+                    
+                    if blocked_reasons:
+                        print(f"⏳ CPUのターン中（ブロック理由: {', '.join(blocked_reasons)}）")
+                    else:
+                        print(f"⏳ CPUのターン中（フェーズ: {game_state['cpu_action_phase']}, タイマー: {game_state['cpu_timer']}）")
+                else:
+                    print(f"❓ 不明な状態: turn={game_state['turn']}")
     
     # プレイヤーの遅延山札処理（こいこい選択中・ゲーム終了後は停止）
     if (game_state.get('player_yama_pending', False) and 
@@ -909,19 +1634,65 @@ while run:
             # 遅延時間が終了したら山札処理を実行
             # 山札処理前に場札の位置を整形
             update_field_positions(field_cards)
-            draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, False, screen_width, screen_height, game_state)
+            yama_drawn = draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, False, screen_width, screen_height, game_state, cpu_hand, field_cards, len(yama_deck))
+            
+            # 山札が空でもターンを正常に終了
+            if not yama_drawn:
+                print("🎴 山札が空です - プレイヤーターン終了")
+            
             game_state['player_yama_pending'] = False
             if 'player_yama_delay' in game_state:
                 del game_state['player_yama_delay']  # 遅延カウンタを削除
-            game_state['turn'] = 'cpu'
-            game_state['cpu_timer'] = 0
+            
+            # 手札と山札が両方とも空になったらゲーム終了
+            if len(yama_deck) == 0 and len(cpu_hand) == 0 and len(player_hand) == 0:
+                print("🏁 全カードを使い切りました - ラウンド終了")
+                
+                # 遅延処理フラグをすべてクリア
+                game_state['player_yama_pending'] = False
+                if 'player_yama_delay' in game_state:
+                    del game_state['player_yama_delay']
+                if 'cpu_yama_delay' in game_state:
+                    del game_state['cpu_yama_delay']
+                
+                # 現在の得点を取得
+                player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
+                cpu_score, cpu_yakus = calculate_score(cpu_captured, screen_width, screen_height)
+                
+                # ラウンド結果を記録
+                round_winner = "プレイヤー" if player_score > cpu_score else ("CPU" if cpu_score > player_score else "引き分け")
+                
+                round_result = {
+                    'round': game_state['current_round'],
+                    'player_score': player_score,
+                    'cpu_score': cpu_score,
+                    'player_yakus': player_yakus,
+                    'cpu_yakus': cpu_yakus,
+                    'winner': round_winner
+                }
+                game_state['round_results'].append(round_result)
+                
+                # 総得点に加算
+                game_state['player_total_score'] += player_score
+                game_state['cpu_total_score'] += cpu_score
+                
+                # ラウンド結果画面を表示
+                game_state['show_round_result'] = True
+                game_state['round_result_timer'] = 0
+                game_state['game_over'] = True
+            else:
+                print(f"🔄 プレイヤー山札処理完了 - CPUターンに切り替え")
+                print(f"   状態: プレイヤー手札={len(player_hand)}枚, CPU手札={len(cpu_hand)}枚, 山札={len(yama_deck)}枚")
+                game_state['turn'] = 'cpu'
+                game_state['cpu_timer'] = 0
     
-    # CPUが役で勝利した場合の処理
+    # CPUが役で勝利した場合の処理（3回戦制対応）
     if (game_state['game_over'] and game_state.get('winner') == 'cpu' and 
-        'result_text' not in game_state):
-        # CPUの役による勝利
+        'result_text' not in game_state and not game_state['show_round_result']):
+        # CPUの役による勝利 - ラウンド終了処理
         cpu_score = game_state.get('final_score_cpu', 0)
         cpu_yakus = game_state.get('final_yakus_cpu', [])
+        player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
         
         print(f"\n=== CPU役による勝利 ===")
         print(f"CPU最終得点: {cpu_score}文")
@@ -930,15 +1701,65 @@ while run:
             for yaku in cpu_yakus:
                 print(f"  • {yaku}")
         
-        result_text = japanese_font.render("CPUの勝利！", True, (255, 0, 0))
-        game_state['result_text'] = result_text
+        # ラウンド結果を記録
+        round_winner = "CPU"  # CPUが役で勝利
+        
+        # 正しい得点計算を実行
+        if cpu_score > player_score:
+            final_player_score, final_cpu_score = calculate_final_scores(
+                game_state, 'cpu', 'player', cpu_score, cpu_yakus, player_score, player_yakus
+            )
+        elif player_score > cpu_score:
+            final_player_score, final_cpu_score = calculate_final_scores(
+                game_state, 'player', 'cpu', player_score, player_yakus, cpu_score, cpu_yakus
+            )
+            round_winner = "プレイヤー"  # 実際はプレイヤーの勝利
+        else:
+            final_player_score, final_cpu_score = calculate_final_scores(
+                game_state, 'cpu', 'player', cpu_score, cpu_yakus, player_score, player_yakus
+            )
+            round_winner = "引き分け"
+        
+        round_result = {
+            'round': game_state['current_round'],
+            'player_score': final_player_score,
+            'cpu_score': final_cpu_score,
+            'player_yakus': player_yakus,
+            'cpu_yakus': cpu_yakus,
+            'winner': round_winner
+        }
+        game_state['round_results'].append(round_result)
+        
+        # 総得点に加算
+        print(f"📊 CPU役勝利 総得点更新: P{game_state['player_total_score']}+{final_player_score} C{game_state['cpu_total_score']}+{final_cpu_score}")
+        game_state['player_total_score'] += final_player_score
+        game_state['cpu_total_score'] += final_cpu_score
+        
+        print(f"\n=== 第{game_state['current_round']}回戦結果（CPU役勝利） ===")
+        print(f"プレイヤー: {player_score}文")
+        print(f"CPU: {cpu_score}文")
+        print(f"勝者: {round_winner}")
+        print(f"総合得点 - プレイヤー: {game_state['player_total_score']}文, CPU: {game_state['cpu_total_score']}文")
+        
+        # ラウンド結果画面を表示
+        game_state['show_round_result'] = True
+        game_state['round_result_timer'] = 0
+        # game_stateのwinnerフラグをクリア
+        if 'winner' in game_state:
+            del game_state['winner']
+        if 'final_score_cpu' in game_state:
+            del game_state['final_score_cpu']
+        if 'final_yakus_cpu' in game_state:
+            del game_state['final_yakus_cpu']
+        
         print("\n💻 CPUの役による勝利！ 💻")
     
     
-    # ゲーム終了判定（全てのアニメーションが終了してから実行、こいこい選択中は停止）
+    # ゲーム終了判定
+    # 1. CPUが上がりを選択した場合（得点加算あり）
+    # 2. カードがすべてなくなった場合（得点加算なし、表示のみ）
     if (not game_state['game_over'] and 
-        len(player_hand) == 0 and 
-        len(cpu_hand) == 0 and 
+        ((len(player_hand) == 0 and len(cpu_hand) == 0) or game_state.get('cpu_agari', False)) and
         not is_animations_active() and
         not game_state['koikoi_choice']):  # こいこい選択中は終了判定も停止
         
@@ -963,44 +1784,78 @@ while run:
         else:
             print("役なし")
         
-        print(f"\n=== 最終結果 ===")
-        print(f"プレイヤー: {player_score}文")
-        if player_yakus:
-            print("プレイヤーの役:")
-            for yaku in player_yakus:
-                print(f"  • {yaku}")
-        else:
-            print("プレイヤー: 役なし")
+        # CPU上がりの場合のみ得点を加算
+        if game_state.get('cpu_agari', False):
+            print("🤖 CPU上がり検出→得点計算開始")
+            # CPU上がりの場合の得点計算
+            if cpu_score > player_score:
+                # CPUの勝利
+                final_player_score, final_cpu_score = calculate_final_scores(
+                    game_state, 'cpu', 'player', cpu_score, cpu_yakus, player_score, player_yakus
+                )
+                round_winner = "CPU"
+            elif player_score > cpu_score:
+                # プレイヤーの勝利
+                final_player_score, final_cpu_score = calculate_final_scores(
+                    game_state, 'player', 'cpu', player_score, player_yakus, cpu_score, cpu_yakus
+                )
+                round_winner = "プレイヤー"
+            else:
+                # 引き分け
+                final_player_score, final_cpu_score = calculate_final_scores(
+                    game_state, 'player', 'cpu', player_score, player_yakus, cpu_score, cpu_yakus
+                )
+                round_winner = "引き分け"
             
-        print(f"CPU: {cpu_score}文")
-        if cpu_yakus:
-            print("CPUの役:")
-            for yaku in cpu_yakus:
-                print(f"  • {yaku}")
+            # 総得点に加算
+            print(f"📊 総得点更新: P{game_state['player_total_score']}+{final_player_score} C{game_state['cpu_total_score']}+{final_cpu_score}")
+            game_state['player_total_score'] += final_player_score
+            game_state['cpu_total_score'] += final_cpu_score
+            
+            print(f"🏆 第{game_state['current_round']}回戦: {round_winner}勝利")
+            print(f"📈 新総合得点: P{game_state['player_total_score']} - C{game_state['cpu_total_score']}")
+            
+            # デバッグ: 最重要情報のみ表示
+            print(f"*** 得点加算確認 ***")
+            print(f"CPU得点: {cpu_score} → 最終{final_cpu_score}")
+            print(f"プレイヤー得点: {player_score} → 最終{final_player_score}")
+            print(f"総合得点: CPU={game_state['cpu_total_score']}, プレイヤー={game_state['player_total_score']}")
+            print(f"*** ここまで ***")
+            
+            print(f"\n=== 第{game_state['current_round']}回戦結果 ===")
+            print(f"プレイヤー: {final_player_score}文（元得点: {player_score}文）")
+            print(f"CPU: {final_cpu_score}文（元得点: {cpu_score}文）")
+            print(f"勝者: {round_winner}")
+            print(f"総合得点 - プレイヤー: {game_state['player_total_score']}文, CPU: {game_state['cpu_total_score']}文")
         else:
-            print("CPU: 役なし")
-
-        if player_score > cpu_score:
-            result_text = japanese_font.render("プレイヤーの勝利！", True, (0, 255, 0))
-            print("\n🎊 プレイヤーの勝利！ 🎊")
-            game_state['game_over'] = True
-        elif cpu_score > player_score:
-            result_text = japanese_font.render("CPUの勝利！", True, (255, 0, 0))
-            print("\n💻 CPUの勝利！ 💻")
-            game_state['game_over'] = True
-        else:
-            result_text = japanese_font.render("引き分け！", True, (255, 255, 0))
-            print("\n🤝 引き分け！ 🤝")
-            game_state['game_over'] = True
+            # カード終了による自動終了の場合は得点加算なし
+            print("\n🎴 全てのカードが場に出ました")
+            print("💭 誰も「上がり」を選択しなかったため、このラウンドは得点なしです")
+            final_player_score = 0
+            final_cpu_score = 0
+            round_winner = "得点なし"
+            
+            print(f"\n=== 第{game_state['current_round']}回戦結果 ===")
+            print(f"プレイヤー: 0文（役得点: {player_score}文だが加算されず）")
+            print(f"CPU: 0文（役得点: {cpu_score}文だが加算されず）")
+            print(f"勝者: {round_winner}")
+            print(f"総合得点 - プレイヤー: {game_state['player_total_score']}文, CPU: {game_state['cpu_total_score']}文")
         
-        # 結果テキストをgame_stateに保存
-        game_state['result_text'] = result_text
-    
-    # ゲーム終了後の結果表示
-    if game_state['game_over'] and 'result_text' in game_state:
-        # 結果を画面中央に表示
-        text_rect = game_state['result_text'].get_rect(center=(screen_width//2, screen_height//2))
-        screen.blit(game_state['result_text'], text_rect)
+        # ラウンド結果を保存
+        round_result = {
+            'round': game_state['current_round'],
+            'player_score': final_player_score,
+            'cpu_score': final_cpu_score,
+            'player_yakus': player_yakus,
+            'cpu_yakus': cpu_yakus,
+            'winner': round_winner
+        }
+        game_state['round_results'].append(round_result)
+        
+        # ラウンド結果画面を表示
+        game_state['show_round_result'] = True
+        game_state['round_result_timer'] = 0
+        game_state['game_over'] = True  # 一時的にゲームを停止
 
     pygame.display.update()
     clock.tick(FPS)

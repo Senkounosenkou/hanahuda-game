@@ -1,6 +1,24 @@
 from animation import CardAnimation, CardOverlayDisplay, YamaCardHighlight, CapturedCardHighlight, CardMergeAnimation, YakuCutInAnimation  # アニメーション関連クラスをインポート（カットインクラスを追加）
 import random  # CPUの判断用
 
+# 効果音オブジェクト（main.pyから設定される）
+card_capture_sound = None
+yaku_complete_sound = None
+
+def set_sound_effects(capture_sound, yaku_sound):
+    """main.pyから効果音オブジェクトを設定"""
+    global card_capture_sound, yaku_complete_sound
+    card_capture_sound = capture_sound
+    yaku_complete_sound = yaku_sound
+
+def play_sound_effect(sound):
+    """効果音を再生する関数"""
+    if sound:
+        try:
+            sound.play()
+        except:
+            pass  # 音が再生できない場合は無視
+
 # グローバル変数（アニメーション管理）
 active_animations = []  # アクティブなアニメーションのリスト
 active_overlays = []  # アクティブなオーバーレイ表示のリスト
@@ -14,40 +32,191 @@ cutin_queue = []  # 新規追加: カットインアニメーションのキュ�
 previous_player_yakus = []  # プレイヤーの前回の役リスト（新しい役のみカットイン表示するため）
 previous_cpu_yakus = []  # CPUの前回の役リスト（新しい役のみカットイン表示するため）
 
-def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards):
-    """CPUのこいこい選択を決定する関数
+def analyze_game_situation(cpu_captured, player_captured, cpu_hand, field_cards, yama_count):
+    """ゲーム状況を詳細分析する関数
+    Returns:
+        dict: 分析結果
+    """
+    analysis = {
+        'cpu_potential': 0,      # CPU追加得点可能性
+        'player_threat': 0,      # プレイヤー脅威度
+        'game_progress': 0,      # ゲーム進行度
+        'risk_level': 'low'      # リスクレベル
+    }
+    
+    # ゲーム進行度計算（山札残り枚数とターン数から）
+    total_cards = 48
+    remaining_cards = yama_count + len(cpu_hand) if cpu_hand else yama_count
+    analysis['game_progress'] = (total_cards - remaining_cards) / total_cards
+    
+    # CPU追加得点可能性を分析
+    analysis['cpu_potential'] = calculate_potential_score(cpu_captured, cpu_hand, field_cards)
+    
+    # プレイヤー脅威度を分析
+    analysis['player_threat'] = calculate_player_threat(player_captured, field_cards)
+    
+    # リスクレベル判定
+    if analysis['game_progress'] > 0.8:  # ゲーム終盤
+        analysis['risk_level'] = 'high'
+    elif analysis['player_threat'] > 5:  # プレイヤーが高得点
+        analysis['risk_level'] = 'medium'
+    else:
+        analysis['risk_level'] = 'low'
+    
+    return analysis
+
+def calculate_potential_score(captured_cards, hand_cards, field_cards):
+    """CPUの追加得点可能性を計算"""
+    potential = 0
+    
+    # 現在の状況から役完成可能性をチェック
+    current_score, current_yakus = calculate_score(captured_cards)
+    
+    # 光札の追加可能性
+    bright_cards = [c for c in captured_cards if c.type == "bright"]
+    if len(bright_cards) == 3:  # 三光から四光・五光への可能性
+        potential += 3  # 高い追加価値
+    elif len(bright_cards) == 2:  # 二光から三光への可能性
+        potential += 2
+    
+    # 種札の役完成可能性
+    boar = any(c.month == 7 and c.name == "boar" for c in captured_cards)
+    deer = any(c.month == 10 and c.name == "maple_deer" for c in captured_cards)
+    butterfly = any(c.month == 6 and c.name == "peony_butterfly" for c in captured_cards)
+    
+    ino_shika_cho_count = sum([boar, deer, butterfly])
+    if ino_shika_cho_count == 2:  # 猪鹿蝶まであと1枚
+        potential += 4
+    elif ino_shika_cho_count == 1:  # 猪鹿蝶まであと2枚
+        potential += 1
+    
+    # 短冊系の役可能性
+    ribbon_cards = [c for c in captured_cards if "ribbon" in c.type or c.type == "tan"]
+    red_ribbons = [c for c in ribbon_cards if c.type == "red_ribbon"]
+    blue_ribbons = [c for c in ribbon_cards if c.type == "blue_ribbon"]
+    
+    if len(red_ribbons) == 2:  # 赤短まであと1枚
+        potential += 3
+    if len(blue_ribbons) == 2:  # 青短まであと1枚
+        potential += 3
+    
+    return potential
+
+def calculate_player_threat(player_captured, field_cards):
+    """プレイヤーの脅威度を計算"""
+    player_score, player_yakus = calculate_score(player_captured)
+    
+    # 基本脅威度は現在の得点
+    threat = player_score
+    
+    # 高価値役の存在で脅威度アップ
+    for yaku in player_yakus:
+        if "光" in yaku:
+            threat += 2  # 光系の役は特に脅威
+        elif "猪鹿蝶" in yaku or "花見酒" in yaku or "月見酒" in yaku:
+            threat += 1  # 特殊役も脅威
+    
+    return threat
+
+def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, cpu_hand=None, player_captured=None, field_cards=None, yama_count=0):
+    """CPUのこいこい選択を決定する強化版関数
     Args:
         current_score: 現在の得点
         current_yaku_list: 現在成立している役のリスト
         captured_cards: 現在の取り札
+        cpu_hand: CPUの手札（枚数チェック用）
+        player_captured: プレイヤーの取り札（脅威度判定用）
+        field_cards: 場札（可能性分析用）
+        yama_count: 山札残り枚数
     Returns:
         str: "koikoi" または "agari"
     """
-    # 基本戦略: 得点に基づいて判断
+    # デバッグ出力: 手札情報をチェック
+    if cpu_hand is not None:
+        print(f"🤖 CPU手札: {len(cpu_hand)}枚")
+    else:
+        print(f"🤖 CPU手札: None")
     
-    # 高得点（8点以上）なら上がり
-    if current_score >= 8:
+    # 手札が0枚なら確定で上がり（ゲーム終了が近いため）
+    if cpu_hand is not None and len(cpu_hand) == 0:
+        print("🤖 手札0枚→確定上がり")
         return "agari"
     
-    # 五光・四光・雨四光は必ず上がり
+    # 詳細状況分析を実行
+    if player_captured is not None and field_cards is not None:
+        situation = analyze_game_situation(captured_cards, player_captured, cpu_hand, field_cards, yama_count)
+        print(f"🧠 CPU分析: 可能性={situation['cpu_potential']}, 脅威={situation['player_threat']}, 進行度={situation['game_progress']:.1f}")
+    else:
+        # 従来の簡易分析
+        situation = {'cpu_potential': 0, 'player_threat': 0, 'game_progress': 0.5, 'risk_level': 'medium'}
+    
+    # 絶対上がり条件
+    if current_score >= 10:  # 超高得点
+        print("🤖 CPU判断: 超高得点のため確定上がり")
+        return "agari"
+    
+    # 五光・四光は必ず上がり
     for yaku in current_yaku_list:
-        if "五光" in yaku or "四光" in yaku or "雨四光" in yaku:
+        if "五光" in yaku or "四光" in yaku:
+            print("🤖 CPU判断: 最高役のため確定上がり")
             return "agari"
     
-    # 5-7点の中得点: 70%の確率で上がり
-    if 5 <= current_score <= 7:
-        return "agari" if random.random() < 0.7 else "koikoi"
+    # 強化された判断ロジック
+    agari_score = 0  # 上がり判断スコア
+    koikoi_score = 0  # こいこい判断スコア
     
-    # 3-4点: 50%の確率でこいこい
-    if 3 <= current_score <= 4:
-        return "koikoi" if random.random() < 0.5 else "agari"
+    # 現在得点による基本判断
+    if current_score >= 8:
+        agari_score += 60
+    elif current_score >= 6:
+        agari_score += 40
+    elif current_score >= 4:
+        agari_score += 20
+    else:
+        koikoi_score += 20  # 低得点ならこいこい傾向
     
-    # 1-2点: 80%の確率でこいこい
-    if 1 <= current_score <= 2:
-        return "koikoi" if random.random() < 0.8 else "agari"
+    # 追加得点可能性による判断
+    if situation['cpu_potential'] >= 4:  # 高い追加可能性
+        koikoi_score += 40
+    elif situation['cpu_potential'] >= 2:
+        koikoi_score += 20
     
-    # デフォルトは上がり
-    return "agari"
+    # プレイヤー脅威度による判断
+    if situation['player_threat'] >= 6:  # 高脅威
+        agari_score += 30  # 早めに上がる
+    elif situation['player_threat'] >= 4:
+        agari_score += 15
+    
+    # ゲーム進行度による判断
+    if situation['game_progress'] >= 0.8:  # 終盤
+        agari_score += 25  # 安全策
+    elif situation['game_progress'] <= 0.3:  # 序盤
+        koikoi_score += 15  # 積極策
+    
+    # リスクレベルによる調整
+    if situation['risk_level'] == 'high':
+        agari_score += 20
+    elif situation['risk_level'] == 'low':
+        koikoi_score += 10
+    
+    # 特殊役による判断
+    for yaku in current_yaku_list:
+        if "雨四光" in yaku:
+            agari_score += 30  # 雨四光は価値高い
+        elif "三光" in yaku:
+            koikoi_score += 15  # 四光を狙える
+        elif "猪鹿蝶" in yaku or "花見酒" in yaku or "月見酒" in yaku:
+            agari_score += 25  # 特殊役は確実に
+    
+    # 最終判断
+    print(f"🤖 判断スコア: 上がり={agari_score} vs こいこい={koikoi_score}")
+    
+    if agari_score > koikoi_score:
+        print(f"🤖 選択: 上がり")
+        return "agari"
+    else:
+        print(f"🤖 選択: こいこい")
+        return "koikoi"
 
 # アニメーション管理用のグローバル変数
 
@@ -85,17 +254,21 @@ def process_cutin_queue(screen_width, screen_height, game_state=None):
         game_state['cpu_choice_timer'] = 120  # 2秒間表示
         
         if cpu_choice == "agari":
-            # CPUが上がりを選択
+            # CPUが上がりを選択 - main.py側で得点計算を実行
             print("🤖 CPUが上がりを選択！")
-            print(f"🏆 CPUの勝利！ 得点: {cpu_score}文")
             game_state['game_over'] = True
             game_state['winner'] = 'cpu'
+            game_state['cpu_agari'] = True  # CPU上がりフラグ
+            # 得点と役の情報を保存
             game_state['final_score_cpu'] = cpu_score
-            game_state['final_yakus_cpu'] = cpu_yakus
+            game_state['final_yakus_cpu'] = cpu_yakus.copy()
+            print(f"💰 CPU最終得点保存: {cpu_score}文, 役: {cpu_yakus}")
         else:
             # CPUがこいこいを選択
             print("🔥 CPUがこいこいを選択！")
             print("💪 ゲーム続行します")
+            game_state['koikoi_was_declared'] = True  # こいこい宣言フラグ
+            game_state['koikoi_declarer'] = 'cpu'  # 宣言者を記録
             # ゲーム続行（何もしない）
         
         # CPUの選択フラグをクリア
@@ -336,13 +509,13 @@ def get_captured_card_position(captured_list, is_cpu=True, screen_height=800):
     card_count = len(captured_list)  # 取得済みカード数
     return 50 + (card_count % 20) * 35, base_y  # x座標（20枚で折り返し）とy座標を返す
 
-def capture_cards_with_animation(hand_card, field_card, captured_list, is_cpu=True, screen_height=800, screen_width=1200, game_state=None):
+def capture_cards_with_animation(hand_card, field_card, captured_list, is_cpu=True, screen_height=800, screen_width=1200, game_state=None, cpu_hand=None, player_captured=None, field_cards_ref=None, yama_count=0):
     """アニメーション付きでカードを取得する関数（カットイン対応版）"""
     # 単一カードの場合は、リストに変換して複数カード処理関数を呼び出し
     field_cards = [field_card] if field_card else []
-    return capture_multiple_cards_with_animation(hand_card, field_cards, captured_list, is_cpu, screen_height, screen_width, game_state)
+    return capture_multiple_cards_with_animation(hand_card, field_cards, captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
 
-def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list, is_cpu=True, screen_height=800, screen_width=1200, game_state=None):
+def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list, is_cpu=True, screen_height=800, screen_width=1200, game_state=None, cpu_hand=None, player_captured=None, field_cards_ref=None, yama_count=0):
     """複数の場札を同時に取得するアニメーション付き関数（3枚取り対応）"""
     global active_merge_animations, active_captured_highlights, active_cutin_animations, active_animations, previous_player_yakus, previous_cpu_yakus, cutin_queue  # グローバル変数を使用
     
@@ -373,6 +546,9 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
     
     print(f"🃏 取得: 手札={hand_card.name}, 場札={[card.name for card in field_cards]} (計{len(field_cards)+1}枚)")
     
+    # カード取得効果音を再生
+    play_sound_effect(card_capture_sound)
+    
     # カード追加直後にスコア計算してカットインをチェック
     cutin_triggered = False
     score, achieved_yakus = calculate_score(captured_list, screen_width, screen_height)
@@ -385,12 +561,13 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
         # 新しく役が成立した場合、カットインを表示
         if new_yakus:
             print(f"🎊 プレイヤー新しい役成立: {new_yakus}")
+            # 役成立効果音を再生
+            play_sound_effect(yaku_complete_sound)
             # 役成立メッセージをここで出力（一度だけ）
             for yaku in new_yakus:
                 print(f"【役成立】{yaku}")
             cutin_triggered = True
-            # すべてのアニメーションを停止
-            active_animations.clear()
+            # カットイン時はマージアニメーションとハイライトのみクリア（スライドアニメーションは保持）
             active_merge_animations.clear()
             active_captured_highlights.clear()
             
@@ -431,17 +608,31 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
         new_yakus = [yaku for yaku in achieved_yakus if yaku not in previous_cpu_yakus]
         if new_yakus:
             print(f"🎊 CPU役成立: {new_yakus}")
+            # 役成立効果音を再生
+            play_sound_effect(yaku_complete_sound)
             # 役成立メッセージをここで出力（一度だけ）
             for yaku in new_yakus:
                 print(f"【役成立】{yaku}")
             cutin_triggered = True
-            # すべてのアニメーションを停止
-            active_animations.clear()
+            # カットイン時はマージアニメーションとハイライトのみクリア（スライドアニメーションは保持）
             active_merge_animations.clear()
             active_captured_highlights.clear()
             
             # CPUの戦略的判断（こいこい or 上がり）
-            cpu_choice = decide_cpu_koikoi_choice(score, achieved_yakus, captured_list)
+            if cpu_hand is not None and player_captured is not None and field_cards_ref is not None:
+                # 強化されたCPU判断（詳細分析付き）
+                cpu_choice = decide_cpu_koikoi_choice(
+                    score, 
+                    achieved_yakus, 
+                    captured_list, 
+                    cpu_hand,
+                    player_captured,
+                    field_cards_ref,
+                    yama_count
+                )
+            else:
+                # 従来の簡易判断（詳細情報が渡されていない場合）
+                cpu_choice = decide_cpu_koikoi_choice(score, achieved_yakus, captured_list, cpu_hand)
             
             if game_state is not None:
                 # CPUの選択をgame_stateに保存（カットイン完了後に処理）
@@ -490,7 +681,7 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
         
         # アニメーション完了後にハイライトを開始
         highlight = CapturedCardHighlight(captured_cards_to_highlight, 30)  # 0.5秒間ハイライト（2倍速）
-        highlight.delay_frames = 105  # 重なり合いアニメーション完了後（1.75秒後、2倍速）
+        highlight.delay_frames = 30  # 短縮: 重なり合いアニメーション完了後（0.5秒後、2倍速）
         highlight.delay_count = 0
         active_captured_highlights.append(highlight)  # アクティブなハイライトリストに追加
     else:
@@ -501,7 +692,7 @@ def capture_multiple_cards_with_animation(hand_card, field_cards, captured_list,
         field_card.y = end_y
         print(f"🎊 カットイン発生により、カードを直接配置: ({end_x}, {end_y})")
 
-def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, is_cpu=False, screen_width=1200, screen_height=800, game_state=None):
+def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, is_cpu=False, screen_width=1200, screen_height=800, game_state=None, cpu_hand=None, field_cards_ref=None, yama_count=0):
     """山札からカードを引く処理関数（スライドアニメーション版）
     Args:
         yama_deck: 山札のリスト
@@ -511,6 +702,9 @@ def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, i
         is_cpu: CPUのターンかどうか
         screen_width: 画面の幅
         screen_height: 画面の高さ
+        cpu_hand: CPUの手札（強化版CPU判断用）
+        field_cards_ref: 場札の参照（強化版CPU判断用）
+        yama_count: 山札残り枚数（強化版CPU判断用）
     """
     global active_animations, active_yama_highlights, active_captured_highlights  # グローバル変数を使用（新しい変数を追加）
     
@@ -531,9 +725,6 @@ def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, i
         target_x = 80 + target_index * 70  # 場札エリアの目標x座標
         target_y = 100 + 150  # 場札エリアの目標y座標（VERTICAL_SPACING=150）
         
-        # 山札から場札エリアへのスライドアニメーション（45フレーム、0.75秒、2倍速）
-        slide_anim = CardAnimation(drawn_card, yama_x, yama_y, target_x, target_y, 45)
-        active_animations.append(slide_anim)
         # 山札から場札エリアへのスライドアニメーション（45フレーム、0.75秒、2倍速）
         slide_anim = CardAnimation(drawn_card, yama_x, yama_y, target_x, target_y, 45)
         active_animations.append(slide_anim)
@@ -565,34 +756,23 @@ def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, i
                 for matching_card in matching_cards:
                     field_cards.remove(matching_card)  # マッチしたカードを場札から削除
                 
-                # 取り札エリアの位置を計算
-                end_x, end_y = get_captured_card_position(cpu_captured if is_cpu else player_captured, is_cpu, screen_height)
+                # スコア計算と役判定を含む正しいカード取得処理を実行
+                # 最初のマッチしたカードを使用して capture_cards_with_animation を呼び出し
+                first_matching_card = matching_cards[0]
                 
-                # 引いたカードのアニメーション
-                drawn_anim = CardAnimation(drawn_card, drawn_card.x, drawn_card.y, end_x, end_y, 60)
-                drawn_anim.delay_frames = 30  # 0.5秒遅延
-                active_animations.append(drawn_anim)
-                
-                # マッチしたカードそれぞれのアニメーション
-                for i, matching_card in enumerate(matching_cards):
-                    field_anim = CardAnimation(matching_card, matching_card.x, matching_card.y, end_x + (i + 1) * 10, end_y + (i + 1) * 5, 60)
-                    field_anim.delay_frames = 30  # 同時に開始
-                    active_animations.append(field_anim)
-                
-                # カードを取り札リストに追加
+                # capture_cards_with_animation を呼び出してスコア計算と役判定を実行
                 target_captured_list = cpu_captured if is_cpu else player_captured
-                target_captured_list.append(drawn_card)  # 引いたカードを追加
-                for matching_card in matching_cards:
-                    target_captured_list.append(matching_card)  # マッチしたカードを追加
+                capture_cards_with_animation(drawn_card, first_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
                 
-                # 取得したカードを取り札エリアでハイライト
-                captured_cards_to_highlight = [drawn_card] + matching_cards
-                
-                # 移動完了直後にハイライトを開始
-                captured_highlight = CapturedCardHighlight(captured_cards_to_highlight, 30)  # 0.5秒間ハイライト（2倍速）
-                captured_highlight.delay_frames = 60  # 修正: 移動完了と同時（1秒後、2倍速）
-                captured_highlight.delay_count = 0
-                active_captured_highlights.append(captured_highlight)  # アクティブなハイライトリストに追加
+                # 追加のマッチしたカードがあれば、カードがリストに追加された後の位置を計算
+                if len(matching_cards) > 1:
+                    for additional_card in matching_cards[1:]:
+                        target_captured_list.append(additional_card)
+                        # 追加後の正しい位置を計算
+                        end_x, end_y = get_captured_card_position(target_captured_list, is_cpu, screen_height)
+                        additional_card.x = end_x
+                        additional_card.y = end_y
+                        additional_card.is_face_up = True
             else:
                 # マッチしなかった場合は場札として残る
                 print(f"{'CPU' if is_cpu else 'Player'}: 山札の {drawn_card.name} は場に残ります")  # デバッグ出力
@@ -685,9 +865,33 @@ def is_animations_active():
     Returns:
         bool: アニメーションが実行中の場合True
     """
-    return (len(active_animations) > 0 or len(active_overlays) > 0 or 
-            len(active_yama_highlights) > 0 or len(active_captured_highlights) > 0 or
-            len(active_merge_animations) > 0 or len(active_cutin_animations) > 0)  # カットインアニメーションも含めてチェック
+    animations_count = len(active_animations)
+    overlays_count = len(active_overlays)
+    yama_highlights_count = len(active_yama_highlights)
+    captured_highlights_count = len(active_captured_highlights)
+    merge_animations_count = len(active_merge_animations)
+    cutin_animations_count = len(active_cutin_animations)
+    
+    is_active = (animations_count > 0 or overlays_count > 0 or 
+                yama_highlights_count > 0 or captured_highlights_count > 0 or
+                merge_animations_count > 0 or cutin_animations_count > 0)
+    
+    # デバッグ: アニメーション状況をログ出力（アクティブな場合のみ）
+    if is_active:
+        print(f"🎬 アニメーション実行中:")
+        print(f"   通常: {animations_count}, オーバーレイ: {overlays_count}")
+        print(f"   山札ハイライト: {yama_highlights_count}, 取札ハイライト: {captured_highlights_count}")
+        
+        # 取札ハイライトの詳細情報
+        if captured_highlights_count > 0:
+            for i, highlight in enumerate(active_captured_highlights):
+                status = "遅延中" if highlight.delay_count < highlight.delay_frames else "実行中"
+                frame_info = f"遅延{highlight.delay_count}/{highlight.delay_frames}, 残り{highlight.display_duration - highlight.frame_count}"
+                print(f"     ハイライト{i+1}: {status} ({frame_info})")
+        
+        print(f"   マージ: {merge_animations_count}, カットイン: {cutin_animations_count}")
+    
+    return is_active
 
 def draw_overlays(screen):
     """重ね合わせ表示の描画関数
