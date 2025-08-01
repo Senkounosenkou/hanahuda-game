@@ -28,8 +28,16 @@ from logic import (  # ロジックモジュールから各関数をインポー
 
 pygame.init()  # Pygameを初期化
 
+# pyinstaller対応: アイコンファイルのパス解決
+if getattr(sys, 'frozen', False):
+    # pyinstallerで作成された実行ファイルの場合
+    base_dir = sys._MEIPASS
+else:
+    # 開発環境（.pyファイル実行）の場合
+    base_dir = os.path.dirname(__file__)
 
-icon = pygame.image.load("./assets/img/cards/icon.png") 
+icon_path = os.path.join(base_dir, "assets", "img", "cards", "icon.png")
+icon = pygame.image.load(icon_path) 
 # アイコンを設定
 pygame.display.set_icon(icon)#左上
 
@@ -898,8 +906,14 @@ for card in cards:  # 全カードについて
 FPS = 60  # フレームレートを60FPSに設定
 clock = pygame.time.Clock()  # クロックオブジェクトを作成
 
-# 背景画像の読み込み
-base_dir = os.path.dirname(__file__)  # 現在のファイルのディレクトリを取得
+# 背景画像の読み込み - pyinstaller対応
+if getattr(sys, 'frozen', False):
+    # pyinstallerで作成された実行ファイルの場合
+    base_dir = sys._MEIPASS
+else:
+    # 開発環境（.pyファイル実行）の場合
+    base_dir = os.path.dirname(__file__)  # 現在のファイルのディレクトリを取得
+
 bg_path = os.path.join(base_dir, "assets", "img", "other", "tatami.png")  # 背景画像のパスを構築
 background = pygame.image.load(bg_path)  # 背景画像を読み込み
 background = pygame.transform.scale(background, (screen_width, screen_height))  # 背景画像を画面サイズにスケール

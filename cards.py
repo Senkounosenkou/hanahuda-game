@@ -1,5 +1,6 @@
 import pygame
 import os
+import sys
 
 class Cards:
     def __init__(self, position, month, type, name, front_image_path, back_image_path, is_face_up):
@@ -23,7 +24,14 @@ class Cards:
         self.y = 0
 
     def load_images(self):
-        base_dir = os.path.dirname(__file__)
+        # pyinstaller対応: 実行ファイルか開発環境かを判定
+        if getattr(sys, 'frozen', False):
+            # pyinstallerで作成された実行ファイルの場合
+            base_dir = sys._MEIPASS
+        else:
+            # 開発環境（.pyファイル実行）の場合
+            base_dir = os.path.dirname(__file__)
+            
         front_path = os.path.join(base_dir, self.front_image_path)
         back_path = os.path.join(base_dir, self.back_image_path)
         self.front_image = pygame.image.load(front_path).convert_alpha()

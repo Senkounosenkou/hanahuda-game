@@ -1,6 +1,7 @@
 import pygame  # Pygameライブラリをインポート
 import math  # 数学関数をインポート（より滑らかなイージング用）
 import os  # ファイル操作用
+import sys  # pyinstaller対応のパス解決用
 
 class CardMergeAnimation:
     """2枚のカードが重なり合いながら移動するアニメーションクラス（修正版）"""
@@ -361,8 +362,14 @@ class YakuCutInAnimation:
             else:
                 file_yaku_name = clean_yaku_name
             
-            # 役名に応じた画像ファイルを探索（cutinフォルダ内）
-            base_dir = os.path.dirname(__file__)
+            # 役名に応じた画像ファイルを探索（cutinフォルダ内） - pyinstaller対応
+            if getattr(sys, 'frozen', False):
+                # pyinstallerで作成された実行ファイルの場合
+                base_dir = sys._MEIPASS
+            else:
+                # 開発環境（.pyファイル実行）の場合
+                base_dir = os.path.dirname(__file__)
+            
             image_path = os.path.join(base_dir, "assets", "img", "cutin", f"{file_yaku_name}_cutin.png")
             
             print(f"   カットイン画像パス: {image_path}")
@@ -383,7 +390,14 @@ class YakuCutInAnimation:
                 print(f"   カットイン画像読み込み成功: {image_path}")
                 print(f"   元のサイズ: {original_width}x{original_height} → スケール後: {scaled_width}x{scaled_height} (倍率: {scale_factor:.2f})")
             else:
-                # 画像が見つからない場合はデフォルト画像を探索
+                # 画像が見つからない場合はデフォルト画像を探索 - pyinstaller対応
+                if getattr(sys, 'frozen', False):
+                    # pyinstallerで作成された実行ファイルの場合
+                    base_dir = sys._MEIPASS
+                else:
+                    # 開発環境（.pyファイル実行）の場合
+                    base_dir = os.path.dirname(__file__)
+                    
                 default_path = os.path.join(base_dir, "assets", "img", "cutin", "default_cutin.png")
                 if os.path.exists(default_path):
                     original_image = pygame.image.load(default_path)
