@@ -1,9 +1,118 @@
 from animation import CardAnimation, CardOverlayDisplay, YamaCardHighlight, CapturedCardHighlight, CardMergeAnimation, YakuCutInAnimation  # アニメーション関連クラスをインポート（カットインクラスを追加）
 import random
+import pygame  # ハイライト描画用
 
 # 効果音オブジェクト（main.pyから設定される）
 card_capture_sound = None
 yaku_complete_sound = None
+
+def get_card_value_for_capture(card):
+    """山札カード取得時のカード価値を数値で返す関数"""
+    if card.type == "bright":
+        return 20
+    elif card.type == "tane":
+        return 10
+    elif "ribbon" in card.type or card.type == "tan":
+        return 5
+    else:
+        return 1
+
+def choose_best_matching_card_for_cpu(matching_cards):
+    """CPUが山札からの複数マッチ時に最適なカードを選択"""
+    print(f"🔍 CPU選択分析: {len(matching_cards)}枚から選択")
+    for card in matching_cards:
+        print(f"  - {card.name}: 価値{get_card_value_for_capture(card)} ({card.type})")
+    
+    sorted_cards = sorted(matching_cards, key=get_card_value_for_capture, reverse=True)
+    best_card = sorted_cards[0]
+    print(f"🤖 CPU戦略選択: {best_card.name} (価値: {get_card_value_for_capture(best_card)})")
+    return best_card
+
+def choose_best_matching_card_for_player(matching_cards):
+    """プレイヤーが山札からの複数マッチ時に最適なカードを選択"""
+    # 手動選択モード：選択状態を設定してプレイヤーの入力を待つ
+    global player_selection_state
+    
+    if len(matching_cards) == 1:
+        # 1枚しかない場合は自動選択
+        best_card = matching_cards[0]
+        print(f"👤 プレイヤー自動選択: {best_card.name} (選択肢1枚)")
+        return best_card
+    else:
+        # 複数枚ある場合は選択状態に移行
+        player_selection_state['is_selecting'] = True
+        player_selection_state['matching_cards'] = matching_cards.copy()
+        player_selection_state['highlighted_cards'] = matching_cards.copy()
+        
+        print(f"👤 プレイヤー選択待ち: {len(matching_cards)}枚から選択")
+        for i, card in enumerate(matching_cards):
+            print(f"  {i+1}. {card.name} (価値: {get_card_value_for_capture(card)})")
+        
+        # 選択待ち状態なので、とりあえず最初のカードを返す（後で変更される）
+        return matching_cards[0]
+
+def start_player_card_selection(drawn_card, matching_cards, completion_callback):
+    """プレイヤーのカード選択を開始する関数"""
+    global player_selection_state
+    
+    player_selection_state['is_selecting'] = True
+    player_selection_state['drawn_card'] = drawn_card
+    player_selection_state['matching_cards'] = matching_cards.copy()
+    player_selection_state['selection_callback'] = completion_callback
+    player_selection_state['highlighted_cards'] = matching_cards.copy()
+    
+    print(f"🎯 プレイヤー選択開始: {len(matching_cards)}枚から選択してください")
+
+def handle_player_card_selection(mouse_pos):
+    """プレイヤーがカードをクリックした時の処理"""
+    global player_selection_state
+    
+    if not player_selection_state['is_selecting']:
+        return False  # 選択中でない場合は何もしない
+    
+    # マウス座標からクリックされたカードを検索
+    clicked_card = None
+    mx, my = mouse_pos
+    
+    for card in player_selection_state['matching_cards']:
+        if (card.x <= mx <= card.x + card.get_image().get_width() and
+            card.y <= my <= card.y + card.get_image().get_height()):
+            clicked_card = card
+            break
+    
+    # クリックされたカードが選択可能なカードかチェック
+    if clicked_card and clicked_card in player_selection_state['matching_cards']:
+        selected_card = clicked_card
+        print(f"👤 プレイヤー選択完了: {selected_card.name}")
+        
+        # 選択状態をクリア
+        drawn_card = player_selection_state['drawn_card']
+        callback = player_selection_state['selection_callback']
+        
+        player_selection_state['is_selecting'] = False
+        player_selection_state['drawn_card'] = None
+        player_selection_state['matching_cards'] = []
+        player_selection_state['selection_callback'] = None
+        player_selection_state['highlighted_cards'] = []
+        
+        # コールバック関数を実行
+        if callback:
+            callback(drawn_card, selected_card)
+        
+        return True
+    else:
+        print(f"⚠️ 無効な選択: {clicked_card.name if clicked_card else 'クリック範囲外'}")
+        return False
+
+def is_player_selecting():
+    """プレイヤーが選択中かどうかを返す"""
+    return player_selection_state['is_selecting']
+
+def get_player_selection_cards():
+    """プレイヤー選択中のカードリストを返す"""
+    if player_selection_state['is_selecting']:
+        return player_selection_state['highlighted_cards']
+    return []
 
 def set_sound_effects(capture_sound, yaku_sound):
     """main.pyから効果音オブジェクトを設定"""
@@ -31,6 +140,15 @@ cutin_queue = []  # 新規追加: カットインアニメーションのキュ�
 # 役状態管理
 previous_player_yakus = []  # プレイヤーの前回の役リスト（新しい役のみカットイン表示するため）
 previous_cpu_yakus = []  # CPUの前回の役リスト（新しい役のみカットイン表示するため）
+
+# プレイヤー選択状態管理
+player_selection_state = {
+    'is_selecting': False,      # プレイヤーが選択中かどうか
+    'drawn_card': None,         # 山札から引いたカード
+    'matching_cards': [],       # マッチした場札のリスト
+    'selection_callback': None, # 選択完了時のコールバック関数
+    'highlighted_cards': []     # ハイライト表示中のカード
+}
 
 def analyze_game_situation(cpu_captured, player_captured, cpu_hand, field_cards, yama_count):
     """ゲーム状況を詳細分析する関数
@@ -748,38 +866,244 @@ def draw_from_yama_deck(yama_deck, field_cards, cpu_captured, player_captured, i
             if matching_cards:  # マッチした場合
                 print(f"{'CPU' if is_cpu else 'Player'}: 山札の {drawn_card.name} と場の {len(matching_cards)}枚が一致: {[c.name for c in matching_cards]}")
                 
-                # 強調表示を作成（最初の1枚のみ）
-                highlight = YamaCardHighlight(drawn_card, matching_cards[0])
-                active_yama_highlights.append(highlight)
-                
-                # 引いたカードと同じ月のカードを全て場札から削除
-                field_cards.remove(drawn_card)  # 引いたカードを場札から削除
-                for matching_card in matching_cards:
-                    field_cards.remove(matching_card)  # マッチしたカードを場札から削除
-                
-                # スコア計算と役判定を含む正しいカード取得処理を実行
-                # 最初のマッチしたカードを使用して capture_cards_with_animation を呼び出し
-                first_matching_card = matching_cards[0]
-                
-                # capture_cards_with_animation を呼び出してスコア計算と役判定を実行
-                target_captured_list = cpu_captured if is_cpu else player_captured
-                capture_cards_with_animation(drawn_card, first_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
-                
-                # 追加のマッチしたカードがあれば、カードがリストに追加された後の位置を計算
-                if len(matching_cards) > 1:
-                    for additional_card in matching_cards[1:]:
-                        target_captured_list.append(additional_card)
-                        # 追加後の正しい位置を計算
-                        end_x, end_y = get_captured_card_position(target_captured_list, is_cpu, screen_height)
-                        additional_card.x = end_x
-                        additional_card.y = end_y
-                        additional_card.is_face_up = True
+                # 戦略的選択：CPUの花札ルールに従った処理
+                if is_cpu:
+                    if len(matching_cards) == 1:
+                        # 1枚の場合は自動選択
+                        first_matching_card = matching_cards[0]
+                        print(f"🤖 CPU自動選択: {first_matching_card.name}")
+                        
+                        # 強調表示を作成
+                        highlight = YamaCardHighlight(drawn_card, first_matching_card)
+                        active_yama_highlights.append(highlight)
+                        
+                        # カード取得処理
+                        field_cards.remove(drawn_card)
+                        field_cards.remove(first_matching_card)
+                        
+                        target_captured_list = cpu_captured
+                        capture_cards_with_animation(drawn_card, first_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                    elif len(matching_cards) == 2:
+                        # 2枚の場合は戦略的選択（高価値カードを選択）
+                        selected_matching_card = choose_best_matching_card_for_cpu(matching_cards)
+                        
+                        # 強調表示を作成
+                        highlight = YamaCardHighlight(drawn_card, selected_matching_card)
+                        active_yama_highlights.append(highlight)
+                        
+                        # 引いたカードと選択されたカードのみを場札から削除
+                        field_cards.remove(drawn_card)
+                        field_cards.remove(selected_matching_card)
+                        
+                        # 選択されなかったカードは場に残る
+                        
+                        target_captured_list = cpu_captured
+                        capture_cards_with_animation(drawn_card, selected_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                    elif len(matching_cards) == 3:
+                        # 3枚の場合は全て取得（花札ルール）
+                        print(f"🤖 3枚マッチ: 全て取得します - {[card.name for card in matching_cards]}")
+                        
+                        # 強調表示を作成（最初のカードで代表）
+                        highlight = YamaCardHighlight(drawn_card, matching_cards[0])
+                        active_yama_highlights.append(highlight)
+                        
+                        # 引いたカードと全てのマッチしたカードを場札から削除
+                        field_cards.remove(drawn_card)
+                        for matching_card in matching_cards:
+                            field_cards.remove(matching_card)
+                        
+                        # 全てのカードを取得
+                        target_captured_list = cpu_captured
+                        capture_cards_with_animation(drawn_card, matching_cards[0], target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                        
+                        # 残りのマッチしたカードも取得
+                        for additional_card in matching_cards[1:]:
+                            target_captured_list.append(additional_card)
+                            end_x, end_y = get_captured_card_position(target_captured_list, is_cpu, screen_height)
+                            additional_card.x = end_x
+                            additional_card.y = end_y
+                            additional_card.is_face_up = True
+                else:
+                    # プレイヤーの場合：花札ルールに従った処理
+                    if len(matching_cards) == 1:
+                        # 1枚の場合は自動選択
+                        first_matching_card = matching_cards[0]
+                        print(f"👤 プレイヤー自動選択: {first_matching_card.name}")
+                        
+                        # 強調表示を作成
+                        highlight = YamaCardHighlight(drawn_card, first_matching_card)
+                        active_yama_highlights.append(highlight)
+                        
+                        # カード取得処理
+                        field_cards.remove(drawn_card)
+                        field_cards.remove(first_matching_card)
+                        
+                        target_captured_list = player_captured
+                        capture_cards_with_animation(drawn_card, first_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                    elif len(matching_cards) == 2:
+                        # 2枚の場合は手動選択（1枚のみ取得）
+                        def on_selection_complete(selected_drawn_card, selected_matching_card):
+                            """選択完了時のコールバック関数"""
+                            # 強調表示を作成
+                            highlight = YamaCardHighlight(selected_drawn_card, selected_matching_card)
+                            active_yama_highlights.append(highlight)
+                            
+                            # 引いたカードと選択されたカードのみを場札から削除
+                            if selected_drawn_card in field_cards:
+                                field_cards.remove(selected_drawn_card)
+                            if selected_matching_card in field_cards:
+                                field_cards.remove(selected_matching_card)
+                            
+                            # 【修正】選択されなかったカードは場に残す（削除しない）
+                            # 残りのマッチしたカードは場札に残る
+                            
+                            # カード取得処理（選択されたカードのみ）
+                            target_captured_list = player_captured
+                            capture_cards_with_animation(selected_drawn_card, selected_matching_card, target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                            
+                            # 場札の位置を更新
+                            update_field_positions(field_cards)
+                        
+                        # 選択開始
+                        start_player_card_selection(drawn_card, matching_cards, on_selection_complete)
+                        print(f"🎯 プレイヤー選択待ち: カードをクリックして選択してください")
+                        return True  # 選択待ち状態なので処理を中断
+                    elif len(matching_cards) == 3:
+                        # 3枚の場合は全て取得（花札ルール）
+                        print(f"🎯 3枚マッチ: 全て取得します - {[card.name for card in matching_cards]}")
+                        
+                        # 強調表示を作成（最初のカードで代表）
+                        highlight = YamaCardHighlight(drawn_card, matching_cards[0])
+                        active_yama_highlights.append(highlight)
+                        
+                        # 引いたカードと全てのマッチしたカードを場札から削除
+                        field_cards.remove(drawn_card)
+                        for matching_card in matching_cards:
+                            field_cards.remove(matching_card)
+                        
+                        # 全てのカードを取得
+                        target_captured_list = player_captured
+                        capture_cards_with_animation(drawn_card, matching_cards[0], target_captured_list, is_cpu, screen_height, screen_width, game_state, cpu_hand, player_captured, field_cards_ref, yama_count)
+                        
+                        # 残りのマッチしたカードも取得
+                        for additional_card in matching_cards[1:]:
+                            target_captured_list.append(additional_card)
+                            end_x, end_y = get_captured_card_position(target_captured_list, is_cpu, screen_height)
+                            additional_card.x = end_x
+                            additional_card.y = end_y
+                            additional_card.is_face_up = True
             else:
                 # マッチしなかった場合は場札として残る
                 print(f"{'CPU' if is_cpu else 'Player'}: 山札の {drawn_card.name} は場に残ります")  # デバッグ出力
             
             # 場札の位置を最終的に更新
             update_field_positions(field_cards)  # 場札の位置を更新
+
+                # 【新規追加】山札からカードを引いた後の役判定（マッチしなかった場合も含む）
+        if not is_cpu:  # プレイヤーの場合
+            # プレイヤーの現在のスコアと役を計算
+            current_score, current_yakus = calculate_score(player_captured, screen_width, screen_height)
+            
+            # 新しく成立した役のみを特定
+            new_yakus = [yaku for yaku in current_yakus if yaku not in previous_player_yakus]
+            
+            if new_yakus and current_score > 0:
+                print(f"🎯 プレイヤーが山札後に役成立: {current_score}文")
+                for yaku in new_yakus:
+                    print(f"  • {yaku}")
+                
+                # 役成立効果音を再生
+                play_sound_effect(yaku_complete_sound)
+                
+                # こいこい選択画面を表示するためのフラグを設定
+                if game_state is not None:
+                    game_state['pending_koikoi_choice'] = True
+                    game_state['current_round_score'] = current_score
+                    game_state['current_yakus'] = current_yakus.copy()
+                    game_state['koikoi_player'] = 'player'
+                    print("🎯 山札後の役成立でこいこい選択画面を設定")
+                
+                # カットイン表示
+                if len(new_yakus) == 1:
+                    cutin_animation = YakuCutInAnimation(new_yakus[0], screen_width, screen_height)
+                    active_cutin_animations.append(cutin_animation)
+                    print(f"🎬 山札後カットイン開始: {new_yakus[0]}")
+                else:
+                    # 複数の役の場合
+                    first_yaku = new_yakus[0]
+                    remaining_yakus = new_yakus[1:]
+                    
+                    cutin_animation = YakuCutInAnimation(first_yaku, screen_width, screen_height)
+                    active_cutin_animations.append(cutin_animation)
+                    print(f"🎬 山札後最初のカットイン開始: {first_yaku}")
+                    
+                    cutin_queue.extend(remaining_yakus)
+                    print(f"📝 山札後キューに追加された役: {remaining_yakus}")
+                
+                # プレイヤーの役状態を更新
+                global previous_player_yakus
+                previous_player_yakus = current_yakus.copy()
+        
+        else:  # CPUの場合
+            # CPUの現在のスコアと役を計算
+            current_score, current_yakus = calculate_score(cpu_captured, screen_width, screen_height)
+            
+            # 新しく成立した役のみを特定
+            new_yakus = [yaku for yaku in current_yakus if yaku not in previous_cpu_yakus]
+            
+            if new_yakus and current_score > 0:
+                print(f"🎯 CPUが山札後に役成立: {current_score}文")
+                for yaku in new_yakus:
+                    print(f"  • {yaku}")
+                
+                # 役成立効果音を再生
+                play_sound_effect(yaku_complete_sound)
+                
+                # CPUの戦略的判断（こいこい or 上がり）
+                if cpu_hand is not None and player_captured is not None and field_cards_ref is not None:
+                    cpu_choice = decide_cpu_koikoi_choice(
+                        current_score, 
+                        current_yakus, 
+                        cpu_captured, 
+                        cpu_hand,
+                        player_captured,
+                        field_cards_ref,
+                        yama_count
+                    )
+                else:
+                    cpu_choice = decide_cpu_koikoi_choice(current_score, current_yakus, cpu_captured, cpu_hand)
+                
+                if game_state is not None:
+                    # CPUの選択をgame_stateに保存（カットイン完了後に処理）
+                    game_state['pending_cpu_choice'] = True
+                    game_state['cpu_choice'] = cpu_choice
+                    game_state['cpu_score'] = current_score
+                    game_state['cpu_yakus'] = current_yakus.copy()
+                    print(f"🤖 CPU山札後選択保存: {cpu_choice} (カットイン完了後に処理)")
+                
+                # カットイン表示
+                if len(new_yakus) == 1:
+                    cutin_animation = YakuCutInAnimation(new_yakus[0], screen_width, screen_height)
+                    active_cutin_animations.append(cutin_animation)
+                    print(f"🎬 CPU山札後カットイン開始: {new_yakus[0]}")
+                else:
+                    # 複数の役の場合
+                    first_yaku = new_yakus[0]
+                    remaining_yakus = new_yakus[1:]
+                    
+                    cutin_animation = YakuCutInAnimation(first_yaku, screen_width, screen_height)
+                    active_cutin_animations.append(cutin_animation)
+                    print(f"🎬 CPU山札後最初のカットイン開始: {first_yaku}")
+                    
+                    cutin_queue.extend(remaining_yakus)
+                    print(f"📝 CPU山札後キューに追加された役: {remaining_yakus}")
+                
+                # CPUの役状態を更新
+                global previous_cpu_yakus
+                previous_cpu_yakus = current_yakus.copy()
+
+
+
         
         # スライドアニメーションにコールバック関数を設定（45フレーム後に実行、2倍速）
         slide_anim.completion_callback = check_yama_match_after_slide
@@ -960,3 +1284,36 @@ def draw_cutin_animations(screen):
     for cutin in active_cutin_animations:  # 各カットインアニメーションについて
         if cutin.is_active:  # アクティブなカットインのみ描画
             cutin.draw(screen)  # カットインを描画
+
+def is_turn_blocked():
+    """ターンの進行がブロックされているかチェック"""
+    # プレイヤーが選択中の場合はターン進行をブロック
+    return player_selection_state['is_selecting']
+
+def can_proceed_to_next_turn():
+    """次のターンに進めるかチェック"""
+    # アニメーション実行中またはプレイヤー選択中の場合は進行不可
+    return not is_animations_active() and not player_selection_state['is_selecting']
+
+def draw_player_selection_highlights(screen):
+    """プレイヤー選択中のカードハイライト表示"""
+    global player_selection_state
+    
+    if player_selection_state['is_selecting']:
+        # 選択可能なカードに青い枠を表示
+        for card in player_selection_state['highlighted_cards']:
+            if hasattr(card, 'x') and hasattr(card, 'y'):
+                # 青い光る枠を描画（選択可能カード）
+                pygame.draw.rect(screen, (0, 150, 255),  # 青色
+                               (card.x-6, card.y-6,
+                                card.get_image().get_width()+12,
+                                card.get_image().get_height()+12), 6)
+        
+        # 山札から引いたカードに緑の枠を表示
+        if player_selection_state['drawn_card']:
+            drawn = player_selection_state['drawn_card']
+            if hasattr(drawn, 'x') and hasattr(drawn, 'y'):
+                pygame.draw.rect(screen, (0, 255, 0),  # 緑色
+                               (drawn.x-4, drawn.y-4,
+                                drawn.get_image().get_width()+8,
+                                drawn.get_image().get_height()+8), 4)

@@ -120,7 +120,7 @@ def choose_best_cpu_card(cpu_hand, cpu_captured, field_cards):
         card_type = get_card_type_by_name(card.name)
         if card_type == 'bright':
             priority += 300
-        elif card.name == 'chrysanthemum_sake_cup':
+        elif card.name == 'chrysanthemum_sake_cup':#菊の杯より強いものはない
             priority += 2000
         
         # 4. 猪鹿蝶の判定
@@ -804,6 +804,33 @@ def setup_test_scenario(test_type, deck):
         remaining_player = []
         remaining_field = ['pine_tan', 'plum_tan', 'cherry_tan']
         
+    elif test_type == "山札選択" or test_type == "yama_select":
+        print("📝 山札選択テスト配置を設定 - 場に松のカード2枚、プレイヤーが松のカードを引く")
+        # 場札に松の短冊と松カス1を配置（2枚のみ）
+        # プレイヤーが山札から松の鶴を引いて選択する
+        player_cards = []  # プレイヤー手札は松以外
+        field_card_names = ['pine_tan', 'pine_1']  # 松の短冊と松カス1（2枚のみ）
+        # 残りは通常配置
+        remaining_player = ['plum_bird', 'cherry_curtain', 'wagtail', 'iris_bridge', 'peony_butterfly', 'maple_1', 'bush_clover_1']
+        remaining_field = ['plum_tan', 'cherry_tan', 'wisteria_tan', 'iris_tan']
+        
+        # 山札の先頭に松の鶴（光札）を配置
+        target_yama_cards = ['pine_crane']  # 松の鶴（1月の光札）
+        
+    elif test_type == "山札選択2" or test_type == "yama_select2":
+        print("📝 山札選択テスト2配置を設定（価値比較）")
+        # 9月の菊を使った高価値vs低価値選択テスト
+        # 場札に菊の杯（種札・高価値）と菊カス（カス札・低価値）を配置
+        # 山札から菊の短冊を引く設定
+        player_cards = ['chrysanthemum_bird']  # 9月のダミー種札（実際は存在しないが、手札調整用）
+        field_card_names = ['chrysanthemum_sake_cup', 'chrysanthemum_1', 'chrysanthemum_2']  # 菊杯、菊カス1、菊カス2
+        # 残りは通常配置
+        remaining_player = ['pine_crane', 'plum_bird', 'cherry_curtain', 'wagtail', 'iris_bridge']
+        remaining_field = ['pine_tan', 'plum_tan', 'cherry_tan']
+        
+        # 山札の先頭に菊の短冊を配置
+        target_yama_cards = ['chrysanthemum_tan']  # 菊の短冊（9月の短冊札）
+        
     else:
         print("❌ 不明なテストタイプ、通常配置にします")
         return None  # 通常のシャッフル配置を使用
@@ -884,9 +911,23 @@ def setup_test_scenario(test_type, deck):
     
     # 山札（残りすべて）
     yama_deck = [card for card in deck.cards if card not in used_cards]
-    random.shuffle(yama_deck)
+    
+    # 山札の先頭に特定のカードを配置（テスト用）
+    if 'target_yama_cards' in locals():
+        print(f"📋 山札先頭カード設定: {target_yama_cards}")
+        # 指定されたカードを山札から探して先頭に移動
+        for card_name in reversed(target_yama_cards):  # 逆順で処理（最後のカードが最前面になる）
+            target_card = find_card(card_name)
+            if target_card and target_card in yama_deck:
+                yama_deck.remove(target_card)
+                yama_deck.insert(0, target_card)  # 先頭に挿入
+                print(f"  🎯 山札先頭に配置: {target_card.name}")
+    
+    random.shuffle(yama_deck[1:])  # 先頭以外をシャッフル（先頭カードは固定）
     
     print(f"✅ テスト配置完了: プレイヤー{len(player_hand)}枚, CPU{len(cpu_hand)}枚, 場札{len(field_cards)}枚, 山札{len(yama_deck)}枚")
+    if 'target_yama_cards' in locals():
+        print(f"  🔍 山札先頭カード: {yama_deck[0].name if yama_deck else 'なし'}")
     
     return player_hand, cpu_hand, field_cards, yama_deck
 
@@ -1141,6 +1182,11 @@ while run:
         if not is_in_yama_highlight and not is_in_merge_animation and not is_in_normal_animation:
             card.update_and_draw(screen)
 
+    # プレイヤー選択ハイライトの描画
+    from logic import is_player_selecting, draw_player_selection_highlights
+    if is_player_selecting():
+        draw_player_selection_highlights(screen)
+
     # 山札の描画（一番上のカードのみ表示）
     if len(yama_deck) > 0:
         yama_deck[0].update_and_draw(screen)  # 山札の一番上のカードを描画
@@ -1256,10 +1302,12 @@ while run:
         # else:
         #     print(f"✅ CPUターン処理条件クリア: フェーズ={game_state['cpu_action_phase']}")
 
-    # CPUターンの処理（こいこい選択中・ゲーム終了後・CPUメッセージ表示中は停止）
+    # CPUターンの処理（こいこい選択中・ゲーム終了後・CPUメッセージ表示中・プレイヤー選択中は停止）
+    from logic import is_turn_blocked
     if (game_state['turn'] == 'cpu' and 
         not is_animations_active() and not game_state['koikoi_choice'] and
-        not game_state['game_over'] and not game_state['cpu_choice_display']):  # ゲーム終了後は停止
+        not game_state['game_over'] and not game_state['cpu_choice_display'] and
+        not is_turn_blocked()):  # プレイヤー選択中はCPUターンをブロック
         
         # CPUのフェーズに基づいて処理を継続（手札チェックは後で行う）
         game_state['cpu_timer'] += 1
@@ -1403,6 +1451,14 @@ while run:
                 game_state['cpu_choice_display'] = False
                 game_state['cpu_choice_type'] = None
                 continue  # 他のダイアログ消去処理はスキップ
+            
+            # プレイヤーの手動選択処理
+            from logic import is_player_selecting, handle_player_card_selection
+            if is_player_selecting():
+                if handle_player_card_selection(event.pos):
+                    print("✅ プレイヤーカード選択完了")
+                continue  # 他の処理はスキップ
+            
             mx, my = event.pos
             # 勝利画面のクリック処理
             if game_state['show_victory_screen'] and victory_buttons:
