@@ -1,5 +1,5 @@
 from animation import CardAnimation, CardOverlayDisplay, YamaCardHighlight, CapturedCardHighlight, CardMergeAnimation, YakuCutInAnimation  # アニメーション関連クラスをインポート（カットインクラスを追加）
-import random  # CPUの判断用
+import random
 
 # 効果音オブジェクト（main.pyから設定される）
 card_capture_sound = None
@@ -137,7 +137,7 @@ def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, c
     else:
         print(f"🤖 CPU手札: None")
     
-    # 手札が２枚未満なら確定で上がり（ゲーム終了が近いため）
+    # 手札が3枚未満なら確定で上がり（ゲーム終了が近いため）
     if cpu_hand is not None and len(cpu_hand) < 3:
         print("🤖 手札0枚→確定上がり")
         return "agari"
@@ -155,9 +155,9 @@ def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, c
         print("🤖 CPU判断: 超高得点のため確定上がり")
         return "agari"
     
-    # 五光・四光は必ず上がり
+    # 五光・四光・三光は必ず上がり
     for yaku in current_yaku_list:
-        if "五光" in yaku or "四光" in yaku:
+        if "五光" in yaku or "四光" in yaku or "三光" in yaku:
             print("🤖 CPU判断: 最高役のため確定上がり")
             return "agari"
     
@@ -174,6 +174,7 @@ def decide_cpu_koikoi_choice(current_score, current_yaku_list, captured_cards, c
         agari_score += 20
     else:
         koikoi_score += 20  # 低得点ならこいこい傾向
+
     
     # 追加得点可能性による判断
     if situation['cpu_potential'] >= 4:  # 高い追加可能性

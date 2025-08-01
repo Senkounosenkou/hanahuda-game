@@ -15,18 +15,25 @@ from logic import (  # ロジックモジュールから各関数をインポー
     draw_overlays,  # 重ね合わせ表示描画関数
     draw_yama_highlights,  # 山札強調表示描画関数
     process_cutin_queue,  # カットインキュー処理関数
-    draw_captured_highlights,  # 新規追加: 取り札ハイライト描画関数
-    draw_merge_animations,  # 新規追加: 重なり合いアニメーション描画関数
-    draw_normal_animations,  # 新規追加: 通常のアニメーション描画関数
-    draw_cutin_animations,  # 新規追加: カットインアニメーション描画関数
-    calculate_score,  # 新規追加: 役計算関数
-    set_sound_effects,  # 新規追加: 効果音設定関数
+    draw_captured_highlights,  #  取り札ハイライト描画関数
+    draw_merge_animations,  #  重なり合いアニメーション描画関数
+    draw_normal_animations,  #  通常のアニメーション描画関数
+    draw_cutin_animations,  #  カットインアニメーション描画関数
+    calculate_score,  #  役計算関数
+    set_sound_effects,  #  効果音設定関数
     active_yama_highlights,  # アクティブな山札強調表示リスト
-    active_merge_animations,  # 新規追加: アクティブな重なり合いアニメーションリスト
-    active_animations  # 新規追加: アクティブな通常のアニメーションリスト
+    active_merge_animations,  #  アクティブな重なり合いアニメーションリスト
+    active_animations  #  アクティブな通常のアニメーションリスト
 )
 
 pygame.init()  # Pygameを初期化
+
+
+icon = pygame.image.load("./assets/img/cards/icon.png") 
+# アイコンを設定
+pygame.display.set_icon(icon)#左上
+
+
 
 def get_japanese_font(size=36):
     font_path = [
