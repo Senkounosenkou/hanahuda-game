@@ -23,7 +23,9 @@ from logic import (  # ロジックモジュールから各関数をインポー
     set_sound_effects,  #  効果音設定関数
     active_yama_highlights,  # アクティブな山札強調表示リスト
     active_merge_animations,  #  アクティブな重なり合いアニメーションリスト
-    active_animations  #  アクティブな通常のアニメーションリスト
+    active_animations,  #  アクティブな通常のアニメーションリスト
+    active_cutin_animations,  # アクティブなカットインアニメーションリスト
+    cutin_queue  # カットインキュー
 )
 
 pygame.init()  # Pygameを初期化
@@ -1415,7 +1417,9 @@ while run:
                         game_state['player_total_score'] += player_score
                         game_state['cpu_total_score'] += cpu_score
                         # ダイアログ表示はpendingフラグで遅延
-                        game_state['pending_round_result'] = True
+                        # 【修正】即座にpending_round_resultを設定せず、統一判定に委ねる
+                        print("⏳ 全アニメーション・カットイン完了まで結果ダイアログを延期")
+                        # game_state['pending_round_result'] = True  # コメントアウト
                         game_state['round_result_timer'] = 0
                         game_state['game_over'] = True
                     else:
@@ -1784,7 +1788,9 @@ while run:
                 game_state['cpu_total_score'] += cpu_score
                 
                 # ラウンド結果画面を表示
-                game_state['show_round_result'] = True
+                # 【修正】即座にshow_round_resultを設定せず、統一判定に委ねる
+                print("⏳ 全アニメーション・カットイン完了まで結果ダイアログを延期")
+                # game_state['show_round_result'] = True  # コメントアウト
                 game_state['round_result_timer'] = 0
                 game_state['game_over'] = True
             else:
@@ -1866,17 +1872,26 @@ while run:
     
     
     # 手札が0枚になった瞬間はpending_round_resultフラグを立てるだけ
+    # 【修正】全ての処理が完了してからダイアログを表示するように条件を厳格化
     if (not game_state['game_over'] and 
         ((len(player_hand) == 0 and len(cpu_hand) == 0) or game_state.get('cpu_agari', False)) and
         not game_state.get('pending_round_result', False) and
-        not game_state['koikoi_choice']):
+        not game_state['koikoi_choice'] and
+        not game_state.get('player_yama_pending', False) and  # プレイヤー山札処理完了まで待機
+        not is_animations_active() and                        # 全アニメーション完了まで待機
+        not active_cutin_animations and                       # カットインアニメーション完了まで待機
+        len(cutin_queue) == 0):                              # カットインキュー空まで待機
         game_state['pending_round_result'] = True
+        print("🏁 全処理完了 - ラウンド結果ダイアログ準備完了")
 
-    # pending_round_resultがTrueかつアニメーションが終わったらラウンド終了処理
+    # pending_round_resultがTrueかつ全ての処理が終わったらラウンド終了処理
     if (game_state.get('pending_round_result', False)
         and not is_animations_active()
         and not game_state['game_over']
-        and not game_state['koikoi_choice']):
+        and not game_state['koikoi_choice']
+        and not game_state.get('player_yama_pending', False)  # 追加：プレイヤー山札処理完了確認
+        and len(active_cutin_animations) == 0                 # 追加：カットイン完了確認
+        and len(cutin_queue) == 0):                          # 追加：カットインキュー空確認
         # 実際の役計算を実行
         print("=== プレイヤーの役計算 ===")
         player_score, player_yakus = calculate_score(player_captured, screen_width, screen_height)
