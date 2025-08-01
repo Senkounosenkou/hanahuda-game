@@ -1744,6 +1744,13 @@ while run:
             if 'player_yama_delay' in game_state:
                 del game_state['player_yama_delay']  # 遅延カウンタを削除
             
+            # 【修正】プレイヤーの山札処理完了後、CPUターンに切り替え
+            game_state['turn'] = 'cpu'
+            game_state['cpu_timer'] = 0
+            game_state['cpu_action_phase'] = 'waiting'
+            print("🔄 プレイヤー山札処理完了 - CPUターンに切り替え")
+            print(f"   状態: プレイヤー手札={len(player_hand)}枚, CPU手札={len(cpu_hand)}枚, 山札={len(yama_deck)}枚")
+            
             # 手札と山札が両方とも空になったらゲーム終了
             if len(yama_deck) == 0 and len(cpu_hand) == 0 and len(player_hand) == 0:
                 print("🏁 全カードを使い切りました - ラウンド終了")
